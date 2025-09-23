@@ -30,8 +30,8 @@ const register = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
         if (existingUser) {
             return res.status(400).json({ message: "El correo ya está registrado" });
         }
-        const salt = yield bcryptjs_1.default.genSalt(10);
-        const hashedPassword = yield bcryptjs_1.default.hash(user_password, salt);
+        // const salt = await bcrypt.genSalt(10);
+        // const hashedPassword = await bcrypt.hash(user_password, salt);
         const newPersona = yield persona_1.default.create({
             nombre,
             apellido,
@@ -39,7 +39,7 @@ const register = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
             fecha_nacimiento,
             email,
             nombre_usuario,
-            user_password: hashedPassword,
+            user_password: user_password,
         });
         console.log("Request body:", req.body);
         const token = yield (0, jwt_1.generateToken)({ id_persona: newPersona.id_persona });
@@ -67,8 +67,7 @@ const login = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const persona = yield persona_1.default.findOne({ where: { email } });
         if (!persona) {
-            res.status(400).json({ message: "No se encontró el usuario" });
-            return;
+            return res.status(400).json({ message: "No se encontró el usuario" });
         }
         else {
             console.log("Email buscado:", email);
@@ -86,7 +85,7 @@ const login = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
                 secure: process.env.NODE_ENV === 'production',
                 sameSite: 'strict'
             });
-            res.json({ message: "Sesion iniciada con exito",
+            return res.status(200).json({ message: "Sesion iniciada con exito",
                 id_persona: persona.id_persona,
                 user: persona.nombre,
                 email: persona.email,

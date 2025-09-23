@@ -21,8 +21,8 @@ export const register = async(req:Request, res:Response)=>{
         if (existingUser) {
             return  res.status(400).json({ message: "El correo ya está registrado" });
         }
-        const salt = await bcrypt.genSalt(10);
-        const hashedPassword = await bcrypt.hash(user_password, salt);
+        // const salt = await bcrypt.genSalt(10);
+        // const hashedPassword = await bcrypt.hash(user_password, salt);
         const newPersona = await Persona.create({
             nombre,
             apellido,
@@ -30,7 +30,7 @@ export const register = async(req:Request, res:Response)=>{
             fecha_nacimiento,
             email,
             nombre_usuario,
-            user_password: hashedPassword,
+            user_password: user_password,
         });
         console.log("Request body:", req.body);
         const token = await generateToken({ id_persona: newPersona.id_persona });
@@ -59,8 +59,7 @@ export const login: RequestHandler = async(req:Request, res:Response)=>{
     try{
         const persona = await Persona.findOne({ where: {email}})
         if(!persona){
-            res.status(400).json({message:"No se encontró el usuario"})
-            return;
+            return res.status(400).json({message:"No se encontró el usuario"});
         }
         else{
             console.log("Email buscado:", email);
@@ -78,7 +77,7 @@ export const login: RequestHandler = async(req:Request, res:Response)=>{
                 secure: process.env.NODE_ENV==='production',
                 sameSite: 'strict'
             })
-            res.json({message:"Sesion iniciada con exito",
+            return res.status(200).json({message:"Sesion iniciada con exito",
                 id_persona: persona.id_persona,
                 user: persona.nombre,
                 email: persona.email,
