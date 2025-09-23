@@ -2,7 +2,7 @@
 import Persona from '../models/persona';
 import { Request, Response, RequestHandler }from 'express';
 import { generateToken } from '../libs/jwt'
-import bcrypt from 'bcryptjs'
+import * as bcrypt from 'bcryptjs'
 import jwt from 'jsonwebtoken'
 
 export const register = async(req:Request, res:Response)=>{
@@ -21,19 +21,20 @@ export const register = async(req:Request, res:Response)=>{
         if (existingUser) {
             return  res.status(400).json({ message: "El correo ya está registrado" });
         }
-        // const salt = await bcrypt.genSalt(10);
-        // const hashedPassword = await bcrypt.hash(user_password, salt);
-        const newPersona = await Persona.create({
+
+        try {
+            const fechaNacimientoDate = new Date(fecha_nacimiento);
+            const newPersona = await Persona.create({
             nombre,
             apellido,
             dni,
-            fecha_nacimiento,
+            fecha_nacimiento: fechaNacimientoDate,
             email,
             nombre_usuario,
             user_password: user_password,
         });
         console.log("Request body:", req.body);
-        const token = await generateToken({ id_persona: newPersona.id_persona });
+                const token = await generateToken({ id_persona: newPersona.id_persona });
 
         res.cookie('token',token,{
             httpOnly: true,
@@ -48,7 +49,11 @@ export const register = async(req:Request, res:Response)=>{
                 email: newPersona.email
             }
         });
+    } catch (error: any) {
+            console.log("Error completo:", error);
+            return res.status(500).json({ error: error.message });
         }
+    }
     catch(error){
         res.status(500).json({message:"error message",error});
     }

@@ -36,6 +36,7 @@ Persona.init({
         type: DataTypes.STRING,
         allowNull: false
     },
+
     apellido: {
         type: DataTypes.STRING,
         allowNull: false
@@ -76,7 +77,7 @@ Persona.init({
                 if(!/[A-Z]/.test(value)){
                     throw new Error('La contraseña debe contener una mayúscula');
                 }
-                if(!/[1-9]/.test(value)){
+                if(!/[0-9]/.test(value)){
                     throw new Error("La contraseña debe contener números");        
                 }
             }
