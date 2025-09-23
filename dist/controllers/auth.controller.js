@@ -111,7 +111,7 @@ const login = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
             res.cookie('token', token, {
                 httpOnly: true,
                 secure: process.env.NODE_ENV === 'production',
-                sameSite: 'strict'
+                sameSite: 'lax'
             });
             return res.status(200).json({ message: "Sesion iniciada con exito",
                 id_persona: persona.id_persona,
