@@ -12,7 +12,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.deleteBodega = exports.updateBodega = exports.getBodegas = exports.crearBodega = void 0;
+exports.deleteBodega = exports.updateBodega = exports.getBodega = exports.getBodegas = exports.crearBodega = void 0;
 const bodega_1 = __importDefault(require("../models/bodega"));
 const crearBodega = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     const { nombre, domicilio, descripcion, imagen, aforo } = req.body;
@@ -48,16 +48,39 @@ const getBodegas = (req, res) => __awaiter(void 0, void 0, void 0, function* () 
         res.json({ response });
     }
     catch (error) {
+        console.error(error);
     }
 });
 exports.getBodegas = getBodegas;
-const updateBodega = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+const getBodega = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    const { id_bodega } = req.params;
     try {
+        const response = yield bodega_1.default.findByPk(id_bodega);
+        res.json({ response });
     }
     catch (error) {
+        console.error(error);
+    }
+});
+exports.getBodega = getBodega;
+const updateBodega = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    const { id_bodega } = req.params;
+    const { body } = req.body;
+    try {
+        const response = yield bodega_1.default.update;
+    }
+    catch (error) {
+        console.error(error);
     }
 });
 exports.updateBodega = updateBodega;
 const deleteBodega = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    const { id_bodega } = req.params;
+    try {
+        const response = yield bodega_1.default.destroy();
+    }
+    catch (error) {
+        console.error(error);
+    }
 });
 exports.deleteBodega = deleteBodega;

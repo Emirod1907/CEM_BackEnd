@@ -28,10 +28,40 @@ export const crearEvento: RequestHandler = async (req: Request, res: Response)=>
     }
 }
 
-export const updateEvento: RequestHandler = async (req: Request, res: Response)=>{    
+export const getEventos: RequestHandler = async (req: Request, res: Response)=>{
+    try{
+        const response = await Evento.findAll()
+        res.json({response})
+    }catch(error){
+        console.error(error)
+    }
+}
 
+export const getEvento: RequestHandler = async (req: Request, res: Response)=>{
+    const {id_evento} = req.params
+    try{
+        const response = await Evento.findByPk(id_evento)
+        res.json({response})
+    }catch(error){
+        console.error(error)
+    }
+}
+
+export const updateEvento: RequestHandler = async (req: Request, res: Response)=>{    
+    const {id_evento} = req.params
+    const {body} = req.body
+    try{
+        const response = await Evento.update
+    }catch(error){
+        console.error(error)
+    }
 }
 
 export const deleteEvento: RequestHandler = async (req: Request, res: Response)=>{
-    
+    const { id_evento}= req.params
+    try {
+        const response = await Evento.destroy()
+    } catch (error) {
+        console.error(error)
+    }
 }

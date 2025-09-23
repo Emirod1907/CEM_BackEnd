@@ -1,9 +1,4 @@
 "use strict";
-// import express from 'express'
-// import personasRoutes from '../routes/auth.routes'
-// import cors from 'cors'
-// import db from '../db/connection'
-// import bodyParser from 'body-parser';
 var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
     function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
     return new (P || (P = Promise))(function (resolve, reject) {
@@ -18,58 +13,19 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.Server = void 0;
-// export class Server{
-//     private app: express.Application;
-//     private port: string
-//     private apiPaths = {
-//         personas: '/api/personas'
-//     }
-//     constructor(){
-//         this.app= express();
-//         this.port=process.env.PORT||'8000';
-//         this.dbConnection();
-//         this.middlewares();
-//         this.routes();
-//     }
-//     async dbConnection(){
-//         try{
-//             await db.authenticate();
-//             console.log('Database connected')
-//         }
-//         catch(error){
-//             throw new Error(String(error));
-//         }
-//     }
-//     middlewares(){
-//         this.app.use(cors({
-//             origin: 'http://localhost:5173'
-//         }));
-//         this.app.use(bodyParser.json({ limit: '50mb' }));
-//         this.app.use(bodyParser.urlencoded({ extended: true, limit: '50mb' }));
-//         this.app.use((req, res, next) => {
-//             console.log(`${req.method} ${req.path}`);
-//             console.log('Body:', req.body);
-//             next();
-//         });
-//         this.app.use(express.static('public'))
-//     }
-//     routes(){
-//         this.app.use(this.apiPaths.personas, personasRoutes)
-//     }
-//     listen(){
-//         this.app.listen(this.port, ()=>{
-//             console.log("servidor corriendo en puerto"+this.port);
-//         })
-//     }
-// }
 const express_1 = __importDefault(require("express"));
 const cors_1 = __importDefault(require("cors"));
 const connection_1 = __importDefault(require("../db/connection"));
 const auth_routes_1 = __importDefault(require("../routes/auth.routes"));
+const bodega_routes_1 = __importDefault(require("../routes/bodega.routes"));
+const evento_routes_1 = __importDefault(require("../routes/evento.routes"));
+const cookie_parser_1 = __importDefault(require("cookie-parser"));
 class Server {
     constructor() {
         this.apiPaths = {
-            personas: '/api/personas'
+            auth: '/api/auth',
+            eventos: '/api/eventos',
+            bodegas: '/api/bodegas'
         };
         this.app = (0, express_1.default)();
         this.port = process.env.PORT || '8000';
@@ -88,26 +44,6 @@ class Server {
             }
         });
     }
-    // middlewares() {
-    //     // 2. Body parsing con body-parser
-    //     this.app.use(bodyParser.json({ limit: '50mb' }));
-    //     this.app.use(bodyParser.urlencoded({ extended: true, limit: '50mb' }));
-    //     // 1. CORS primero
-    //     this.app.use(cors({
-    //         origin: 'http://localhost:5173',
-    //         methods: ['GET', 'POST', 'PUT', 'DELETE'],
-    //         allowedHeaders: ['Content-Type', 'Authorization'],
-    //         credentials: true
-    //     }));
-    //     // 3. Logging
-    //     this.app.use((req, res, next) => {
-    //         console.log(`${req.method} ${req.path}`);
-    //         console.log('Body:', req.body);
-    //         next();
-    //     });
-    //     // 4. Archivos estáticos
-    //     this.app.use(express.static('public'));
-    // }
     middlewares() {
         // 3. Body parsing
         this.app.use(express_1.default.json({ limit: '50mb' }));
@@ -140,8 +76,11 @@ class Server {
         this.app.use((0, cors_1.default)({
             origin: 'http://localhost:5173',
             methods: ['GET', 'POST', 'PUT', 'DELETE'],
-            allowedHeaders: ['Content-Type', 'Authorization']
+            allowedHeaders: ['Content-Type', 'Authorization'],
+            credentials: true,
         }));
+        // Cookie parser 
+        this.app.use((0, cookie_parser_1.default)());
         // 4. Logging
         this.app.use((req, res, next) => {
             console.log(`${req.method} ${req.path}`);
@@ -152,7 +91,9 @@ class Server {
         });
     }
     routes() {
-        this.app.use(this.apiPaths.personas, auth_routes_1.default);
+        this.app.use(this.apiPaths.auth, auth_routes_1.default);
+        this.app.use(this.apiPaths.bodegas, bodega_routes_1.default);
+        this.app.use(this.apiPaths.eventos, evento_routes_1.default);
     }
     listen() {
         this.app.listen(this.port, () => {

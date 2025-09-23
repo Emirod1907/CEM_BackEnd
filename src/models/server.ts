@@ -4,13 +4,18 @@ import express from 'express';
 import cors from 'cors';
 import db from '../db/connection';
 import bodyParser from 'body-parser'; // Agrega esto
-import personasRoutes from '../routes/auth.routes';
+import authRoutes from '../routes/auth.routes';
+import bodegasRoutes from '../routes/bodega.routes';
+import eventosRoutes from '../routes/evento.routes';
+import cookieParser from 'cookie-parser'
 
 export class Server {
     private app: express.Application;
     private port: string;
     private apiPaths = {
-        personas: '/api/personas'
+        auth: '/api/auth',
+        eventos: '/api/eventos',
+        bodegas: '/api/bodegas'
     }
 
     constructor() {
@@ -67,9 +72,12 @@ if (typeof contentLength === 'string') {
   this.app.use(cors({
     origin: 'http://localhost:5173',
     methods: ['GET', 'POST', 'PUT', 'DELETE'],
-    allowedHeaders: ['Content-Type', 'Authorization']
+    allowedHeaders: ['Content-Type', 'Authorization'],
+    credentials: true,
   }));
 
+  // Cookie parser 
+  this.app.use(cookieParser());
   // 4. Logging
   this.app.use((req, res, next) => {
     console.log(`${req.method} ${req.path}`);
@@ -80,7 +88,9 @@ if (typeof contentLength === 'string') {
   });
 }
     routes() {
-        this.app.use(this.apiPaths.personas, personasRoutes);
+        this.app.use(this.apiPaths.auth, authRoutes);
+        this.app.use(this.apiPaths.bodegas, bodegasRoutes);
+        this.app.use(this.apiPaths.eventos, eventosRoutes);
     }
 
     listen() {

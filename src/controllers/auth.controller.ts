@@ -3,6 +3,7 @@ import Persona from '../models/persona';
 import { Request, Response, RequestHandler }from 'express';
 import { generateToken } from '../libs/jwt'
 import bcrypt from 'bcryptjs'
+import jwt from 'jsonwebtoken'
 
 export const register = async(req:Request, res:Response)=>{
     
@@ -37,7 +38,7 @@ export const register = async(req:Request, res:Response)=>{
         res.cookie('token',token,{
             httpOnly: true,
             secure: process.env.NODE_ENV ==='production',
-            sameSite: 'strict'
+            sameSite: 'none'
         }),
         res.json({
             msg:"Usuario creado con éxito",
@@ -95,3 +96,22 @@ export const logout: RequestHandler = async( req:Request, res: Response)=>{
     res.clearCookie('token');
     res.json({msg:"Sesion cerrada con Exito!"})
 }
+
+export const verify = async ( req: Request, res: Response)=>{
+    const {token} = req.cookies
+
+    if(!token) return res.status(401).json({message: "Unauthorized"});
+    try {
+        const decoded = jwt.verify(token, process.env.JWT_SECRET!)as any;
+        const personaFound = await Persona.findByPk(decoded.id_persona)
+
+        if(!personaFound) return res.status(401).json({message:"User not found"})
+        
+        return res.json({
+                id_persona: personaFound.id_persona,
+                user: personaFound.nombre,
+                email: personaFound.email,
+        })
+    }catch (error) {
+        return res.status(401).json({ message: "Invalid or expired token" });
+    }}

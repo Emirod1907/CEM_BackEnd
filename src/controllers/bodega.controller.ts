@@ -34,19 +34,36 @@ export const getBodegas: RequestHandler = async(req: Request, res: Response)=>{
         const response = await Bodega.findAll()
         res.json({response})
     } catch (error) {
-        
+        console.error(error)
+    }
+}
+
+export const getBodega: RequestHandler = async(req: Request, res: Response)=>{
+    const {id_bodega} = req.params
+    try {
+        const response = await Bodega.findByPk(id_bodega)
+        res.json({response})
+    } catch (error) {
+        console.error(error)
     }
 }
 
 
 export const updateBodega: RequestHandler = async(req: Request, res: Response)=>{
+    const {id_bodega} = req.params
+    const { body } = req.body
     try {
-        
+        const response = await Bodega.update
     } catch (error) {
-        
+        console.error(error)    
     }
 }
 
 export const deleteBodega: RequestHandler = async(req: Request, res: Response)=>{
-
+    const {id_bodega}= req.params
+    try {
+        const response = await Bodega.destroy()
+    } catch (error) {
+        console.error(error)
+    }
 }

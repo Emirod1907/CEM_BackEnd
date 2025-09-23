@@ -1,7 +1,7 @@
 import { Router } from "express";
 import type { RequestHandler } from "express";
 import { deletePersona, getPersona, getPersonas, postPersona, putPersona } from "../controllers/persona.controller";
-import { register , login, logout } from '../controllers/auth.controller';
+import { register , login, logout, verify } from '../controllers/auth.controller';
 
 const router = Router()
 
@@ -24,13 +24,7 @@ router.post('/register', (req, res) => {
 router.post('/login', login);
 router.post('/logout', logout );
 
-router.get('/', getPersonas)
-router.get('/:id',getPersona)
-router.post('/',postPersona)
-router.put('/:id',putPersona)
-router.delete('/:id',deletePersona)
-
-
+router.get('/verify', verify )
 
 
 

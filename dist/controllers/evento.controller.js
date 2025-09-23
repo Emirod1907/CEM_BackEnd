@@ -23,7 +23,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.deleteEvento = exports.updateEvento = exports.crearEvento = void 0;
+exports.deleteEvento = exports.updateEvento = exports.getEvento = exports.getEventos = exports.crearEvento = void 0;
 const evento_1 = __importDefault(require("../models/evento"));
 const reserva_1 = __importDefault(require("../models/reserva"));
 const crearEvento = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
@@ -53,9 +53,45 @@ const crearEvento = (req, res) => __awaiter(void 0, void 0, void 0, function* ()
     }
 });
 exports.crearEvento = crearEvento;
+const getEventos = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const response = yield evento_1.default.findAll();
+        res.json({ response });
+    }
+    catch (error) {
+        console.error(error);
+    }
+});
+exports.getEventos = getEventos;
+const getEvento = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    const { id_evento } = req.params;
+    try {
+        const response = yield evento_1.default.findByPk(id_evento);
+        res.json({ response });
+    }
+    catch (error) {
+        console.error(error);
+    }
+});
+exports.getEvento = getEvento;
 const updateEvento = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    const { id_evento } = req.params;
+    const { body } = req.body;
+    try {
+        const response = yield evento_1.default.update;
+    }
+    catch (error) {
+        console.error(error);
+    }
 });
 exports.updateEvento = updateEvento;
 const deleteEvento = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    const { id_evento } = req.params;
+    try {
+        const response = yield evento_1.default.destroy();
+    }
+    catch (error) {
+        console.error(error);
+    }
 });
 exports.deleteEvento = deleteEvento;

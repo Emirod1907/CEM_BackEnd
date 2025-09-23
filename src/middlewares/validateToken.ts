@@ -1,18 +1,30 @@
 import { NextFunction, Request, Response } from "express";
-import jwt from "jsonwebtoken";
-export const authRequired = ( req: Request, res: Response, next: NextFunction)=>{
-    const {token} = req.cookies
-    
-    if (!token) return res.status(401).json({message: "Unauthorized"});
+import { verifyToken } from '../libs/jwt';
+import { JwtPayload } from '../libs/jwt';
 
-    jwt.verify(token, 'secret123', (err, persona)=>{
+const authRequired = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const { token } = req.cookies;
 
-        req.persona = persona;
+    if (!token) {
+      return res.status(401).json({ message: "Unauthorized - No token provided" });
+    }
 
-        next();
-
-    })
-
-
-
-}
+    const decoded = await verifyToken(token);
+    req.persona = decoded;
+    next();
+  } catch (error: any) {
+    if (error.name === 'TokenExpiredError') {
+      return res.status(401).json({ message: "Token expired" });
+    }
+    if (error.name === 'JsonWebTokenError') {
+      return res.status(401).json({ message: "Invalid token" });
+    }
+    return res.status(500).json({ message: "Internal server error" });
+  }
+};
+export default authRequired;

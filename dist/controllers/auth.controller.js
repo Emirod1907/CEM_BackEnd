@@ -12,10 +12,11 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.logout = exports.login = exports.register = void 0;
+exports.verify = exports.logout = exports.login = exports.register = void 0;
 const persona_1 = __importDefault(require("../models/persona"));
 const jwt_1 = require("../libs/jwt");
 const bcryptjs_1 = __importDefault(require("bcryptjs"));
+const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const register = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     if (!req.body || Object.keys(req.body).length === 0) {
         console.error("Request body is empty");
@@ -45,7 +46,7 @@ const register = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
         res.cookie('token', token, {
             httpOnly: true,
             secure: process.env.NODE_ENV === 'production',
-            sameSite: 'strict'
+            sameSite: 'none'
         }),
             res.json({
                 msg: "Usuario creado con éxito",
@@ -104,3 +105,23 @@ const logout = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     res.json({ msg: "Sesion cerrada con Exito!" });
 });
 exports.logout = logout;
+const verify = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    const { token } = req.cookies;
+    if (!token)
+        return res.status(401).json({ message: "Unauthorized" });
+    try {
+        const decoded = jsonwebtoken_1.default.verify(token, process.env.JWT_SECRET);
+        const personaFound = yield persona_1.default.findByPk(decoded.id_persona);
+        if (!personaFound)
+            return res.status(401).json({ message: "User not found" });
+        return res.json({
+            id_persona: personaFound.id_persona,
+            user: personaFound.nombre,
+            email: personaFound.email,
+        });
+    }
+    catch (error) {
+        return res.status(401).json({ message: "Invalid or expired token" });
+    }
+});
+exports.verify = verify;
