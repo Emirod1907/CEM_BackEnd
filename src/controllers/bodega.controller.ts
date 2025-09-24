@@ -4,7 +4,11 @@ import Bodega from "../models/bodega";
 export const crearBodega: RequestHandler = async(req: Request, res: Response)=>{
     const {nombre, domicilio, descripcion, imagen, aforo}= req.body
     console.log('Datos recibidos:', req.body);
+
     try {
+        if (!nombre || !domicilio || !aforo) {
+            return res.status(400).json({message: "Nombre, domicilio y aforo son requeridos"});
+        }
         const existingBodega = await Bodega.findOne({where: {nombre}});
         if(existingBodega){
             return res.status(400).json({message: "La Bodega ya existe"});
@@ -13,9 +17,9 @@ export const crearBodega: RequestHandler = async(req: Request, res: Response)=>{
         const newBodega = await Bodega.create({
             nombre,
             domicilio,
-            descripcion,
-            imagen,
-            aforo
+            descripcion: descripcion||'',
+            imagen: imagen||'',
+            aforo: parseInt(aforo)
         });
         res.json({
             msg: "Bodega creada con éxito",
@@ -25,8 +29,12 @@ export const crearBodega: RequestHandler = async(req: Request, res: Response)=>{
                 domicilio: newBodega.domicilio
             }
         })
-    } catch (error) {
-        res.status(500).json({message:"error message",error})
+    } catch (error: any) {
+        console.error('❌ Error al crear bodega:', error);
+        res.status(500).json({
+            message:"error interno del servidor",
+            error: error.message
+        })
     }
 }
 

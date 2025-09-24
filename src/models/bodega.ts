@@ -39,7 +39,8 @@ Bodega.init({
     },
     imagen:{
         type: DataTypes.STRING,
-        allowNull: false
+        allowNull: true,
+        defaultValue: ''
     },
     aforo:{
         type: DataTypes.NUMBER,

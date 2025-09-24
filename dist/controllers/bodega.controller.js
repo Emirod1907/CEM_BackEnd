@@ -18,6 +18,9 @@ const crearBodega = (req, res) => __awaiter(void 0, void 0, void 0, function* ()
     const { nombre, domicilio, descripcion, imagen, aforo } = req.body;
     console.log('Datos recibidos:', req.body);
     try {
+        if (!nombre || !domicilio || !aforo) {
+            return res.status(400).json({ message: "Nombre, domicilio y aforo son requeridos" });
+        }
         const existingBodega = yield bodega_1.default.findOne({ where: { nombre } });
         if (existingBodega) {
             return res.status(400).json({ message: "La Bodega ya existe" });
@@ -25,9 +28,9 @@ const crearBodega = (req, res) => __awaiter(void 0, void 0, void 0, function* ()
         const newBodega = yield bodega_1.default.create({
             nombre,
             domicilio,
-            descripcion,
-            imagen,
-            aforo
+            descripcion: descripcion || '',
+            imagen: imagen || '',
+            aforo: parseInt(aforo)
         });
         res.json({
             msg: "Bodega creada con éxito",
@@ -39,7 +42,11 @@ const crearBodega = (req, res) => __awaiter(void 0, void 0, void 0, function* ()
         });
     }
     catch (error) {
-        res.status(500).json({ message: "error message", error });
+        console.error('❌ Error al crear bodega:', error);
+        res.status(500).json({
+            message: "error interno del servidor",
+            error: error.message
+        });
     }
 });
 exports.crearBodega = crearBodega;

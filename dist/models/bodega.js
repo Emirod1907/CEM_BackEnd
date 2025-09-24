@@ -27,7 +27,8 @@ Bodega.init({
     },
     imagen: {
         type: sequelize_1.DataTypes.STRING,
-        allowNull: false
+        allowNull: true,
+        defaultValue: ''
     },
     aforo: {
         type: sequelize_1.DataTypes.NUMBER,
