@@ -4,10 +4,10 @@ import { getBodegas, getBodega , crearBodega, updateBodega, deleteBodega } from 
 
 const router = Router()
 
-router.get('/bodegas', authRequired, getBodegas)
-router.get('/bodegas/:id', authRequired, getBodega)
-router.post('/bodega/new', authRequired, crearBodega)
-router.put('/bodega/:id', authRequired, updateBodega)
+router.get('/', authRequired, getBodegas)
+router.get('/:id', authRequired, getBodega)
+router.post('/new', authRequired, crearBodega)
+router.put('/:id', authRequired, updateBodega)
 router.delete('/:id', authRequired, deleteBodega)
 
 export default router;

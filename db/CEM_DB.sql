@@ -85,4 +85,7 @@ FOREIGN KEY (rol_id) REFERENCES roles(id_rol),
 FOREIGN KEY (permiso_id) REFERENCES permisos(id_permiso)
 )engine=innoDB;
 
+ALTER TABLE eventos ADD COLUMN creado_por INT NOT NULL;
+ALTER TABLE eventos ADD FOREIGN KEY (creado_por) REFERENCES personas(id_persona);
+
 show tables from CEM;

@@ -4,9 +4,9 @@ import { crearEvento, deleteEvento, getEvento, getEventos, updateEvento } from "
 
 const router = Router()
 
-router.get('/eventos', getEventos)
-router.get('/eventos/:id', getEvento)
-router.post('/evento/new', authRequired, crearEvento)
+router.get('/', getEventos)
+router.get('/:id', getEvento)
+router.post('/new', authRequired, crearEvento)
 router.put('/:id', authRequired, updateEvento)
 router.delete('/:id', authRequired, deleteEvento)
 
