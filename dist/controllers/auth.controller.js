@@ -110,8 +110,10 @@ const login = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
             const token = yield (0, jwt_1.generateToken)({ id_persona: persona.id_persona });
             res.cookie('token', token, {
                 httpOnly: true,
-                secure: process.env.NODE_ENV === 'production',
-                sameSite: 'lax'
+                // secure: process.env.NODE_ENV==='production',
+                secure: false,
+                sameSite: 'lax',
+                maxAge: 24 * 60 * 60 * 1000
             });
             return res.status(200).json({ message: "Sesion iniciada con exito",
                 id_persona: persona.id_persona,

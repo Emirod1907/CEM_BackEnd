@@ -3,6 +3,7 @@ import Bodega from "../models/bodega";
 
 export const crearBodega: RequestHandler = async(req: Request, res: Response)=>{
     const {nombre, domicilio, descripcion, imagen, aforo}= req.body
+    console.log('Datos recibidos:', req.body);
     try {
         const existingBodega = await Bodega.findOne({where: {nombre}});
         if(existingBodega){

@@ -79,8 +79,10 @@ export const login: RequestHandler = async(req:Request, res:Response)=>{
             const token = await generateToken({id_persona: persona.id_persona})
             res.cookie('token',token, {
                 httpOnly: true,
-                secure: process.env.NODE_ENV==='production',
-                sameSite: 'lax'
+                // secure: process.env.NODE_ENV==='production',
+                secure: false,
+                sameSite: 'lax',
+                maxAge: 24 * 60 * 60 * 1000
             })
             return res.status(200).json({message:"Sesion iniciada con exito",
                 id_persona: persona.id_persona,

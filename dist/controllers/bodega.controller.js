@@ -16,6 +16,7 @@ exports.deleteBodega = exports.updateBodega = exports.getBodega = exports.getBod
 const bodega_1 = __importDefault(require("../models/bodega"));
 const crearBodega = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     const { nombre, domicilio, descripcion, imagen, aforo } = req.body;
+    console.log('Datos recibidos:', req.body);
     try {
         const existingBodega = yield bodega_1.default.findOne({ where: { nombre } });
         if (existingBodega) {
