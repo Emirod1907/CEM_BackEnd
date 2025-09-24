@@ -19,7 +19,7 @@ const crearBodega = (req, res) => __awaiter(void 0, void 0, void 0, function* ()
     try {
         const existingBodega = yield bodega_1.default.findOne({ where: { nombre } });
         if (existingBodega) {
-            res.status(400).json({ message: "La Bodega ya existe" });
+            return res.status(400).json({ message: "La Bodega ya existe" });
         }
         const newBodega = yield bodega_1.default.create({
             nombre,

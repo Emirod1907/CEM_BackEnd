@@ -6,7 +6,7 @@ export const crearBodega: RequestHandler = async(req: Request, res: Response)=>{
     try {
         const existingBodega = await Bodega.findOne({where: {nombre}});
         if(existingBodega){
-            res.status(400).json({message: "La Bodega ya existe"})
+            return res.status(400).json({message: "La Bodega ya existe"});
         }
 
         const newBodega = await Bodega.create({
