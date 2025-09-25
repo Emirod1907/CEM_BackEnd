@@ -2,6 +2,13 @@ import { Request, RequestHandler, Response } from "express";
 import Bodega from "../models/bodega";
 
 export const crearBodega: RequestHandler = async(req: Request, res: Response)=>{
+    
+    console.log('🔍 === INICIO crearBodega ===');
+    console.log('📨 Método:', req.method);
+    console.log('🔗 URL:', req.url);
+    console.log('🍪 Cookies:', req.cookies);
+    console.log('📦 Body recibido:', req.body);
+
     const {nombre, domicilio, descripcion, imagen, aforo}= req.body
     console.log('Datos recibidos:', req.body);
 

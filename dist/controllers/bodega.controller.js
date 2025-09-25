@@ -15,6 +15,11 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.deleteBodega = exports.updateBodega = exports.getBodega = exports.getBodegas = exports.crearBodega = void 0;
 const bodega_1 = __importDefault(require("../models/bodega"));
 const crearBodega = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    console.log('🔍 === INICIO crearBodega ===');
+    console.log('📨 Método:', req.method);
+    console.log('🔗 URL:', req.url);
+    console.log('🍪 Cookies:', req.cookies);
+    console.log('📦 Body recibido:', req.body);
     const { nombre, domicilio, descripcion, imagen, aforo } = req.body;
     console.log('Datos recibidos:', req.body);
     try {
