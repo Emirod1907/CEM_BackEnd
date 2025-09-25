@@ -43,7 +43,7 @@ Bodega.init({
         defaultValue: ''
     },
     aforo:{
-        type: DataTypes.NUMBER,
+        type: DataTypes.INTEGER,
         allowNull: false,
     },
 },{

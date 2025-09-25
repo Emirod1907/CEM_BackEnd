@@ -28,8 +28,14 @@ const evento_1 = __importDefault(require("../models/evento"));
 const reserva_1 = __importDefault(require("../models/reserva"));
 const crearEvento = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     const _a = req.body, { bodega_id, fecha } = _a, eventoData = __rest(_a, ["bodega_id", "fecha"]);
+    console.log('🔍 Fecha recibida:', req.body.fecha);
+    console.log('🔍 Tipo de fecha:', typeof req.body.fecha);
+    eventoData.fecha = new Date(fecha);
     try {
-        const reservaExistente = yield reserva_1.default.findOne({ where: { bodega_id, fecha } });
+        const reservaExistente = yield reserva_1.default.findOne({ where: {
+                bodega_id: bodega_id,
+                fecha: fecha
+            } });
         if (reservaExistente) {
             res.status(400).json({ message: "Bodega no disponible" });
         }

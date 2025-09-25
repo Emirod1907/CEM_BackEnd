@@ -22,7 +22,7 @@ Evento.init({
         allowNull: false,
     },
     fecha: {
-        type: sequelize_1.DataTypes.DATE,
+        type: sequelize_1.DataTypes.DATEONLY,
         allowNull: false
     },
     precio: {

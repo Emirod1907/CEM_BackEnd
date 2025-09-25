@@ -37,7 +37,7 @@ Evento.init({
         allowNull: false,
     },
     fecha: {
-        type: DataTypes.DATE,
+        type: DataTypes.DATEONLY,
         allowNull: false
     },
     precio: {

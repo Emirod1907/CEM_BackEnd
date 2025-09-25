@@ -11,10 +11,26 @@ class Reserva extends sequelize_1.Model {
 }
 ;
 Reserva.init({
-    fecha: sequelize_1.DataTypes.DATE
+    id_reserva: {
+        type: sequelize_1.DataTypes.INTEGER,
+        primaryKey: true,
+        autoIncrement: true
+    },
+    fecha: {
+        type: sequelize_1.DataTypes.DATE
+    },
+    evento_id: {
+        type: sequelize_1.DataTypes.INTEGER,
+        allowNull: false
+    },
+    bodega_id: {
+        type: sequelize_1.DataTypes.INTEGER,
+        allowNull: false
+    }
 }, {
     sequelize: connection_1.default,
-    tableName: 'reservas'
+    tableName: 'reservas',
+    timestamps: true
 });
 Reserva.belongsTo(evento_1.default, { foreignKey: 'evento_id' });
 Reserva.belongsTo(bodega_1.default, { foreignKey: 'bodega_id' });

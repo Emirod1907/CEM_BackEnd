@@ -96,8 +96,20 @@ class Server {
         this.app.use(this.apiPaths.eventos, evento_routes_1.default);
     }
     listen() {
-        this.app.listen(this.port, () => {
-            console.log("Servidor corriendo en puerto " + this.port);
+        return __awaiter(this, void 0, void 0, function* () {
+            try {
+                // await db.query('SET FOREIGN_KEY_CHECKS = 0');
+                // await db.sync({ force: true });
+                // // Reactivar FK checks
+                // await db.query('SET FOREIGN_KEY_CHECKS = 1');
+                // console.log('Tablas sincronizadas (force)');
+                this.app.listen(this.port, () => {
+                    console.log("Servidor corriendo en puerto " + this.port);
+                });
+            }
+            catch (error) {
+                console.error('Error sincronizando tablas:', error);
+            }
         });
     }
 }

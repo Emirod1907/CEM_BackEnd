@@ -4,8 +4,15 @@ import Reserva from "../models/reserva"
 
 export const crearEvento: RequestHandler = async (req: Request, res: Response)=>{
     const { bodega_id, fecha, ...eventoData}= req.body;
+    console.log('🔍 Fecha recibida:', req.body.fecha);
+    console.log('🔍 Tipo de fecha:', typeof req.body.fecha);
+    eventoData.fecha = new Date(fecha);
     try {
-        const reservaExistente = await Reserva.findOne({where:{bodega_id, fecha}})
+        const reservaExistente = await Reserva.findOne(
+            {where:{
+                bodega_id: bodega_id, 
+                fecha: fecha
+            }})
         if(reservaExistente){
             res.status(400).json({message: "Bodega no disponible"})
         }
