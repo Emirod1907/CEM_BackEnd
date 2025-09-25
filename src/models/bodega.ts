@@ -50,6 +50,7 @@ Bodega.init({
         sequelize:db,
         freezeTableName: true,
         modelName:'Bodegas',
+        timestamps: false
     }
 );
 

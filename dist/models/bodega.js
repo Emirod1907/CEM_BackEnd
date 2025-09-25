@@ -38,5 +38,6 @@ Bodega.init({
     sequelize: connection_1.default,
     freezeTableName: true,
     modelName: 'Bodegas',
+    timestamps: false
 });
 exports.default = Bodega;
