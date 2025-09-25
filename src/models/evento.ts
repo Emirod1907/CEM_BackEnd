@@ -56,6 +56,7 @@ Evento.init({
         sequelize:db,
         freezeTableName: true,
         modelName:'Eventos',
+        timestamps: false
     }
 );
 

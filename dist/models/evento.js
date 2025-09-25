@@ -41,5 +41,6 @@ Evento.init({
     sequelize: connection_1.default,
     freezeTableName: true,
     modelName: 'Eventos',
+    timestamps: false
 });
 exports.default = Evento;
