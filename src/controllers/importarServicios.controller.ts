@@ -1,0 +1,272 @@
+import { RequestHandler } from 'express'
+import * as XLSX from 'xlsx'
+import ServicioAdicional from '../models/servicioAdicional'
+import Contrato from '../models/contrato'
+import { logger } from '../libs/logger'
+
+// ── Constantes de validación ───────────────────────────────────────────────────
+const CATEGORIAS_VALIDAS = new Set([
+    'catering', 'decoracion', 'audio_video', 'seguridad',
+    'mobiliario', 'entretenimiento', 'otro',
+])
+const TIPOS_PRECIO_VALIDOS = new Set(['fijo', 'por_persona', 'por_hora', 'por_turno'])
+const TIPOS_ITEM_VALIDOS   = new Set(['producto', 'servicio'])
+
+interface FilaValida {
+    fila: number
+    nombre: string
+    descripcion: string
+    precio_base: number
+    precio: number
+    categoria: string
+    tipo_precio: string
+    tipo_item: string
+    capacidad_maxima: number | null
+}
+
+interface FilaInvalida {
+    fila: number
+    error: string
+}
+
+// ── Helpers ────────────────────────────────────────────────────────────────────
+function normalizarRow(raw: Record<string, any>): Record<string, any> {
+    return Object.fromEntries(
+        Object.entries(raw).map(([k, v]) => [
+            k.trim().toLowerCase().replace(/\s+/g, '_'),
+            typeof v === 'string' ? v.trim() : v,
+        ])
+    )
+}
+
+function parsearExcel(buffer: Buffer): Record<string, any>[] {
+    const wb  = XLSX.read(buffer, { type: 'buffer' })
+    const ws  = wb.Sheets[wb.SheetNames[0]]
+    const raw = XLSX.utils.sheet_to_json<any>(ws, { defval: '' })
+    return raw.map(normalizarRow)
+}
+
+function precioPublico(precio_base: number, comisionPct: number): number {
+    return +(precio_base * (1 + comisionPct / 100)).toFixed(2)
+}
+
+function validarFila(row: Record<string, any>, idx: number): FilaValida | FilaInvalida {
+    const num = idx + 2 // fila del Excel (1=header, datos desde 2)
+
+    const nombre = String(row.nombre ?? '').trim()
+    if (!nombre) return { fila: num, error: 'nombre es requerido' }
+
+    const precioRaw = Number(row.precio_base)
+    if (!row.precio_base && row.precio_base !== 0 || isNaN(precioRaw) || precioRaw <= 0) {
+        return { fila: num, error: 'precio_base debe ser un número mayor a 0' }
+    }
+
+    const categoria = String(row.categoria ?? '').trim().toLowerCase()
+    if (!CATEGORIAS_VALIDAS.has(categoria)) {
+        return {
+            fila: num,
+            error: `categoría inválida "${categoria}" — valores válidos: ${[...CATEGORIAS_VALIDAS].join(', ')}`,
+        }
+    }
+
+    const tipoPrecio = String(row.tipo_precio ?? 'fijo').trim().toLowerCase() || 'fijo'
+    if (!TIPOS_PRECIO_VALIDOS.has(tipoPrecio)) {
+        return {
+            fila: num,
+            error: `tipo_precio inválido "${tipoPrecio}" — valores válidos: ${[...TIPOS_PRECIO_VALIDOS].join(', ')}`,
+        }
+    }
+
+    const tipoItem = String(row.tipo_item ?? 'producto').trim().toLowerCase() || 'producto'
+    if (!TIPOS_ITEM_VALIDOS.has(tipoItem)) {
+        return {
+            fila: num,
+            error: `tipo_item inválido "${tipoItem}" — valores válidos: ${[...TIPOS_ITEM_VALIDOS].join(', ')}`,
+        }
+    }
+
+    const capacidadRaw = row.capacidad_maxima
+    let capacidad_maxima: number | null = null
+    if (capacidadRaw !== '' && capacidadRaw != null) {
+        const n = Number(capacidadRaw)
+        if (isNaN(n) || n <= 0 || !Number.isInteger(n)) {
+            return { fila: num, error: 'capacidad_maxima debe ser un entero positivo o estar vacío' }
+        }
+        capacidad_maxima = n
+    }
+
+    // Construir descripcion: base + presentación si existe
+    let descripcion = String(row.descripcion ?? '').trim()
+    const presentacion = String(row.presentacion ?? '').trim()
+    if (presentacion) {
+        descripcion = descripcion ? `${descripcion} (${presentacion})` : presentacion
+    }
+
+    return {
+        fila: num,
+        nombre,
+        descripcion,
+        precio_base: precioRaw,
+        precio: 0, // se calcula después con la comisión
+        categoria,
+        tipo_precio: tipoPrecio,
+        tipo_item:   tipoItem,
+        capacidad_maxima,
+    }
+}
+
+async function resolverComision(persona_id: number): Promise<number> {
+    // contratoVigenteRequired garantiza que existe — aun así fallback a 0
+    const contrato = await Contrato.findOne({
+        where: { persona_id, estado: 'vigente' },
+        attributes: ['comision_cliente_porcentaje'],
+    })
+    return contrato ? Number(contrato.comision_cliente_porcentaje) : 0
+}
+
+function procesarFilas(
+    rows: Record<string, any>[],
+    comisionPct: number
+): { validas: FilaValida[]; invalidas: FilaInvalida[] } {
+    const validas:   FilaValida[]   = []
+    const invalidas: FilaInvalida[] = []
+
+    for (let i = 0; i < rows.length; i++) {
+        const resultado = validarFila(rows[i], i)
+        if ('error' in resultado) {
+            invalidas.push(resultado)
+        } else {
+            resultado.precio = precioPublico(resultado.precio_base, comisionPct)
+            validas.push(resultado)
+        }
+    }
+
+    return { validas, invalidas }
+}
+
+// ── GET /api/servicios/plantilla-excel ────────────────────────────────────────
+export const getPlantillaExcel: RequestHandler = (_req, res, next) => {
+    try {
+        const HEADERS  = ['nombre', 'descripcion', 'precio_base', 'categoria', 'tipo_precio', 'tipo_item', 'presentacion', 'capacidad_maxima']
+        const EJEMPLO1 = ['Catering Premium', 'Buffet completo para grupos', 80000, 'catering', 'fijo', 'servicio', 'mesa buffet', 100]
+        const EJEMPLO2 = ['Sillas extra', 'Set adicional de sillas', 8000, 'mobiliario', 'fijo', 'producto', 'set x20', '']
+
+        const wb = XLSX.utils.book_new()
+        const ws = XLSX.utils.aoa_to_sheet([HEADERS, EJEMPLO1, EJEMPLO2])
+
+        // Ancho de columnas
+        ws['!cols'] = [
+            { wch: 25 }, { wch: 35 }, { wch: 14 }, { wch: 16 },
+            { wch: 14 }, { wch: 12 }, { wch: 20 }, { wch: 18 },
+        ]
+
+        XLSX.utils.book_append_sheet(wb, ws, 'Servicios')
+        const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' }) as Buffer
+
+        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+        res.setHeader('Content-Disposition', 'attachment; filename="plantilla_servicios.xlsx"')
+        res.send(buf)
+    } catch (err) {
+        next(err)
+    }
+}
+
+// ── POST /api/servicios/importar-excel/preview ────────────────────────────────
+export const previewImportarExcel: RequestHandler = async (req: any, res, next) => {
+    try {
+        if (!req.file) {
+            res.status(400).json({ message: 'No se recibió ningún archivo. Usa el campo "archivo".' })
+            return
+        }
+
+        let rows: Record<string, any>[]
+        try {
+            rows = parsearExcel(req.file.buffer)
+        } catch {
+            res.status(400).json({ message: 'Archivo Excel inválido o corrupto' })
+            return
+        }
+
+        if (rows.length === 0) {
+            res.status(400).json({ message: 'El archivo no contiene filas de datos' })
+            return
+        }
+
+        const proveedor_id = req.persona?.id_persona as number
+        const comisionPct  = await resolverComision(proveedor_id)
+        const { validas, invalidas } = procesarFilas(rows, comisionPct)
+
+        // El proveedor ve sus precios base, NO el precio público con markup sumado
+        const filasPreview = validas.map(({ precio: _p, ...f }) => f)
+
+        res.json({
+            comision_aplicada: comisionPct,
+            filas_validas:     filasPreview,
+            filas_invalidas:   invalidas,
+            total_validas:     validas.length,
+            total_invalidas:   invalidas.length,
+        })
+    } catch (err) {
+        next(err)
+    }
+}
+
+// ── POST /api/servicios/importar-excel/confirmar ──────────────────────────────
+export const confirmarImportarExcel: RequestHandler = async (req: any, res, next) => {
+    try {
+        if (!req.file) {
+            res.status(400).json({ message: 'No se recibió ningún archivo. Usa el campo "archivo".' })
+            return
+        }
+
+        let rows: Record<string, any>[]
+        try {
+            rows = parsearExcel(req.file.buffer)
+        } catch {
+            res.status(400).json({ message: 'Archivo Excel inválido o corrupto' })
+            return
+        }
+
+        if (rows.length === 0) {
+            res.status(400).json({ message: 'El archivo no contiene filas de datos' })
+            return
+        }
+
+        const proveedor_id = req.persona?.id_persona as number
+        const comisionPct  = await resolverComision(proveedor_id)
+        const { validas, invalidas } = procesarFilas(rows, comisionPct)
+
+        if (validas.length === 0) {
+            res.status(400).json({
+                message: 'No hay filas válidas para importar',
+                errores: invalidas,
+            })
+            return
+        }
+
+        const registros = validas.map(f => ({
+            nombre:          f.nombre,
+            descripcion:     f.descripcion,
+            precio_base:     f.precio_base,
+            precio:          f.precio,
+            categoria:       f.categoria,
+            tipo_precio:     f.tipo_precio,
+            tipo_item:       f.tipo_item,
+            capacidad_maxima: f.capacidad_maxima,
+            proveedor_id,
+            disponible: true,
+            imagen: null,
+        }))
+
+        const creados = await ServicioAdicional.bulkCreate(registros as any)
+        logger.info('[ImportarExcel] Servicios importados', { proveedor_id, cantidad: creados.length })
+
+        res.status(201).json({
+            ok:      true,
+            creados: creados.length,
+            errores: invalidas,
+        })
+    } catch (err) {
+        next(err)
+    }
+}
