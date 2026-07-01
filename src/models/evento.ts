@@ -10,6 +10,10 @@ interface EventoAtributos {
     precio: number,
     imagen: string,
     cupo: number,
+    salon_id: number,
+    creado_por: number,
+    estado?: string,
+    es_publico?: boolean,
 }
 
 class Evento extends Model<EventoAtributos> implements EventoAtributos {
@@ -20,6 +24,10 @@ class Evento extends Model<EventoAtributos> implements EventoAtributos {
     declare precio: number;
     declare imagen: string;
     declare cupo: number;
+    declare salon_id: number;
+    declare creado_por: number;
+    declare estado: string;
+    declare es_publico: boolean;
 }
 
 Evento.init({
@@ -33,7 +41,7 @@ Evento.init({
         allowNull: false
     },
     descripcion:{
-        type: DataTypes.STRING,
+        type: DataTypes.TEXT,
         allowNull: false,
     },
     fecha: {
@@ -51,6 +59,24 @@ Evento.init({
     cupo:{
         type: DataTypes.INTEGER,
         allowNull: false,
+    },
+    salon_id:{
+        type: DataTypes.INTEGER,
+        allowNull: false,
+    },
+    creado_por:{
+        type: DataTypes.INTEGER,
+        allowNull: false,
+    },
+    estado:{
+        type: DataTypes.ENUM('borrador', 'activo', 'cancelado'),
+        allowNull: false,
+        defaultValue: 'activo'
+    },
+    es_publico: {
+        type: DataTypes.BOOLEAN,
+        allowNull: false,
+        defaultValue: true,
     },
 },{
         sequelize:db,
