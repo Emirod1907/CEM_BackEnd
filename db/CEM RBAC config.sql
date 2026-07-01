@@ -11,9 +11,9 @@ INSERT INTO permisos (nombre) VALUES
 ('crear_evento'),
 ('editar_evento_propio'),
 ('eliminar_evento_propio'),
-('crear_bodega'),
-('editar_bodega_propia'),
-('eliminar_bodega_propia'),
+('crear_salon'),
+('editar_salon_propio'),
+('eliminar_salon_propio'),
 ('leer_eventos'),
 ('comprar_entradas');
 

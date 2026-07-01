@@ -1,0 +1,382 @@
+import nodemailer from 'nodemailer';
+
+const transporter = nodemailer.createTransport({
+    host: process.env.EMAIL_HOST || 'smtp.gmail.com',
+    port: Number(process.env.EMAIL_PORT) || 587,
+    secure: process.env.EMAIL_PORT === '465',
+    auth: {
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASS,
+    },
+});
+
+interface EntradaEmailParams {
+    toEmail: string;
+    nombre: string;
+    eventoNombre: string;
+    eventoFecha: string;
+    token: string;
+    qrDataUrl: string;
+}
+
+export const sendEntradaEmail = async ({
+    toEmail, nombre, eventoNombre, eventoFecha, token, qrDataUrl
+}: EntradaEmailParams): Promise<void> => {
+    // Convertir data URL a buffer para adjuntar como CID
+    const base64Data = qrDataUrl.replace(/^data:image\/png;base64,/, '')
+    const qrBuffer = Buffer.from(base64Data, 'base64')
+
+    const htmlContent = `
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>Tu entrada — ${eventoNombre}</title>
+</head>
+<body style="margin:0;padding:0;background:#f4f4f4;font-family:'Poppins',Arial,sans-serif;">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f4;padding:40px 0;">
+    <tr><td align="center">
+    <table width="600" cellpadding="0" cellspacing="0" style="background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,.15);">
+
+        <!-- Header -->
+        <tr>
+            <td style="background:linear-gradient(to right,#770981,#1882da);padding:36px 30px;text-align:center;">
+                <h1 style="margin:0;color:#fff;font-family:'Raleway',Arial,sans-serif;font-size:26px;letter-spacing:2px;">Dream Events</h1>
+                <p style="margin:6px 0 0;color:rgba(255,255,255,.85);font-size:13px;">Hacé realidad tu evento soñado</p>
+            </td>
+        </tr>
+
+        <!-- Confirmación -->
+        <tr>
+            <td style="padding:32px 40px 16px;text-align:center;">
+                <div style="width:64px;height:64px;background:linear-gradient(135deg,#770981,#1882da);border-radius:50%;display:inline-flex;align-items:center;justify-content:center;margin-bottom:12px;">
+                    <span style="font-size:30px;line-height:64px;color:#fff;">🎟️</span>
+                </div>
+                <h2 style="margin:0 0 8px;color:#333;font-family:'Raleway',Arial,sans-serif;font-size:20px;">¡Tu entrada está confirmada!</h2>
+                <p style="margin:0;color:#555;font-size:14px;line-height:1.7;">
+                    Hola <strong>${nombre}</strong>, tu asistencia al evento fue registrada exitosamente.
+                </p>
+            </td>
+        </tr>
+
+        <!-- Detalle del evento -->
+        <tr>
+            <td style="padding:8px 40px 24px;">
+                <table width="100%" cellpadding="0" cellspacing="0">
+                    <tr>
+                        <td style="padding:14px 18px;background:#f9f4ff;border-radius:10px;border-left:4px solid #770981;">
+                            <p style="margin:0 0 6px;font-size:16px;font-weight:700;color:#333;font-family:'Raleway',Arial,sans-serif;">📅 ${eventoNombre}</p>
+                            <p style="margin:0;font-size:13px;color:#666;">${eventoFecha}</p>
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+
+        <!-- Separador -->
+        <tr><td style="padding:0 40px;"><hr style="border:none;border-top:1px solid #eee;"/></td></tr>
+
+        <!-- QR -->
+        <tr>
+            <td style="padding:24px 40px;text-align:center;">
+                <p style="margin:0 0 16px;color:#444;font-size:14px;font-weight:600;">Presentá este código QR en la entrada del evento:</p>
+                <img src="cid:qrcode" alt="QR de acceso" width="220" height="220"
+                     style="border:8px solid #f4f0ff;border-radius:12px;display:block;margin:0 auto;"/>
+                <p style="margin:14px 0 0;font-size:11px;color:#aaa;font-family:monospace;">Token: ${token.substring(0, 16)}...</p>
+            </td>
+        </tr>
+
+        <!-- Nota -->
+        <tr>
+            <td style="padding:0 40px 32px;">
+                <table width="100%" cellpadding="0" cellspacing="0">
+                    <tr>
+                        <td style="padding:12px 16px;background:#fff8e1;border-radius:8px;border-left:4px solid #e67e00;">
+                            <p style="margin:0;font-size:13px;color:#555;">
+                                ⚠️ <strong>Importante:</strong> Este código es personal e intransferible.
+                                Solo puede ser utilizado una vez en el acceso al evento.
+                            </p>
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+
+        <!-- Separador -->
+        <tr><td style="padding:0 40px;"><hr style="border:none;border-top:1px solid #eee;"/></td></tr>
+
+        <!-- Footer -->
+        <tr>
+            <td style="padding:20px 40px;text-align:center;">
+                <p style="margin:0;color:#aaa;font-size:12px;line-height:1.6;">
+                    &copy; ${new Date().getFullYear()} Dream Events. Todos los derechos reservados.
+                </p>
+            </td>
+        </tr>
+
+    </table>
+    </td></tr>
+</table>
+</body>
+</html>`.trim()
+
+    await transporter.sendMail({
+        from: `"Dream Events" <${process.env.EMAIL_USER}>`,
+        to: toEmail,
+        subject: `🎟️ Tu entrada para "${eventoNombre}"`,
+        html: htmlContent,
+        attachments: [{
+            filename: 'entrada-qr.png',
+            content: qrBuffer,
+            cid: 'qrcode'
+        }]
+    })
+}
+
+export const sendServiciosNotificacion = async (
+    toEmail: string,
+    nombre: string,
+    salonNombre: string,
+    fecha: string,
+): Promise<void> => {
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+    const htmlContent = `
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>Tu evento en ${salonNombre} — Servicios disponibles</title>
+</head>
+<body style="margin:0;padding:0;background:#f4f4f4;font-family:'Poppins',Arial,sans-serif;">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f4;padding:40px 0;">
+<tr><td align="center">
+<table width="600" cellpadding="0" cellspacing="0" style="background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,.15);">
+
+    <!-- Header -->
+    <tr>
+        <td style="background:linear-gradient(to right,#770981,#1882da);padding:36px 30px;text-align:center;">
+            <h1 style="margin:0;color:#fff;font-family:'Raleway',Arial,sans-serif;font-size:26px;letter-spacing:2px;">Dream Events</h1>
+            <p style="margin:6px 0 0;color:rgba(255,255,255,.85);font-size:13px;">Hacé realidad tu evento soñado</p>
+        </td>
+    </tr>
+
+    <!-- Saludo -->
+    <tr>
+        <td style="padding:32px 40px 20px;text-align:center;">
+            <div style="width:64px;height:64px;background:linear-gradient(135deg,#770981,#1882da);border-radius:50%;display:inline-block;text-align:center;line-height:64px;margin-bottom:12px;">
+                <span style="font-size:30px;">🎉</span>
+            </div>
+            <h2 style="margin:0 0 10px;color:#333;font-family:'Raleway',Arial,sans-serif;font-size:20px;">¡Hola ${nombre}!</h2>
+            <p style="margin:0;color:#555;font-size:14px;line-height:1.7;">
+                Tu evento en <strong>${salonNombre}</strong> está agendado para el <strong>${fecha}</strong>.<br/>
+                Queremos que sea una experiencia única, y tenemos algo especial para ofrecerte.
+            </p>
+        </td>
+    </tr>
+
+    <!-- Separador -->
+    <tr><td style="padding:0 40px;"><hr style="border:none;border-top:1px solid #eee;"/></td></tr>
+
+    <!-- Servicios -->
+    <tr>
+        <td style="padding:24px 40px;">
+            <h3 style="margin:0 0 16px;color:#770981;font-family:'Raleway',Arial,sans-serif;font-size:17px;text-align:center;">
+                🌟 Potenciá tu evento con nuestros servicios adicionales
+            </h3>
+            <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:separate;border-spacing:0 8px;">
+                <tr>
+                    <td style="padding:12px 16px;background:#f9f5ff;border-radius:8px;border-left:4px solid #770981;">
+                        <span style="font-size:20px;">🍽️</span>
+                        <strong style="color:#333;font-size:14px;margin-left:8px;">Catering</strong>
+                        <span style="color:#777;font-size:13px;margin-left:4px;">— Desde menús premium hasta opciones livianas</span>
+                    </td>
+                </tr>
+                <tr>
+                    <td style="padding:12px 16px;background:#f0f8ff;border-radius:8px;border-left:4px solid #1882da;">
+                        <span style="font-size:20px;">🌸</span>
+                        <strong style="color:#333;font-size:14px;margin-left:8px;">Decoración</strong>
+                        <span style="color:#777;font-size:13px;margin-left:4px;">— Temática personalizada, flores y arreglos</span>
+                    </td>
+                </tr>
+                <tr>
+                    <td style="padding:12px 16px;background:#f9f5ff;border-radius:8px;border-left:4px solid #770981;">
+                        <span style="font-size:20px;">🎵</span>
+                        <strong style="color:#333;font-size:14px;margin-left:8px;">Audio y DJ</strong>
+                        <span style="color:#777;font-size:13px;margin-left:4px;">— Sonido profesional e iluminación LED</span>
+                    </td>
+                </tr>
+                <tr>
+                    <td style="padding:12px 16px;background:#f0f8ff;border-radius:8px;border-left:4px solid #1882da;">
+                        <span style="font-size:20px;">🔐</span>
+                        <strong style="color:#333;font-size:14px;margin-left:8px;">Seguridad y Mobiliario</strong>
+                        <span style="color:#777;font-size:13px;margin-left:4px;">— Personal capacitado, sillas, mesas y escenarios</span>
+                    </td>
+                </tr>
+            </table>
+            <p style="margin:16px 0 0;color:#888;font-size:12px;text-align:center;font-style:italic;">
+                Todos nuestros precios son competitivos y podés contratar directamente desde la plataforma.
+            </p>
+        </td>
+    </tr>
+
+    <!-- CTA -->
+    <tr>
+        <td align="center" style="padding:8px 40px 36px;">
+            <a href="${frontendUrl}/eventos"
+               style="display:inline-block;background:linear-gradient(to right,#770981,#1882da);color:#fff;text-decoration:none;padding:14px 36px;border-radius:8px;font-size:15px;font-weight:600;letter-spacing:0.5px;">
+                Ver servicios disponibles
+            </a>
+        </td>
+    </tr>
+
+    <!-- Separador -->
+    <tr><td style="padding:0 40px;"><hr style="border:none;border-top:1px solid #eee;"/></td></tr>
+
+    <!-- Footer -->
+    <tr>
+        <td style="padding:20px 40px;text-align:center;">
+            <p style="margin:0;color:#aaa;font-size:12px;line-height:1.6;">
+                Recibís este correo porque tenés un evento agendado en ${salonNombre}.<br/>
+                &copy; ${new Date().getFullYear()} Dream Events. Todos los derechos reservados.
+            </p>
+        </td>
+    </tr>
+
+</table>
+</td></tr>
+</table>
+</body>
+</html>`.trim();
+
+    await transporter.sendMail({
+        from: `"Dream Events" <${process.env.EMAIL_USER}>`,
+        to: toEmail,
+        subject: `🎉 ¡Tu evento en ${salonNombre} está confirmado! Descubrí nuestros servicios`,
+        html: htmlContent,
+    });
+};
+
+export const sendRegistrationConfirmationEmail = async (
+    toEmail: string,
+    nombre: string
+): Promise<void> => {
+    const htmlContent = `
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>Bienvenido a Dream Events</title>
+</head>
+<body style="margin:0;padding:0;background-color:#f4f4f4;font-family:'Poppins',Arial,sans-serif;">
+    <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f4f4f4;padding:40px 0;">
+        <tr>
+            <td align="center">
+                <table width="600" cellpadding="0" cellspacing="0" style="background-color:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,0.15);">
+
+                    <!-- Header con gradiente del proyecto -->
+                    <tr>
+                        <td style="background:linear-gradient(to right, #770981, #732a95, #6c3fa7, #5761c8, #a1358d, #a71261, #9f0035);padding:40px 30px;text-align:center;">
+                            <h1 style="margin:0;color:#ffffff;font-family:'Raleway',Arial,sans-serif;font-size:28px;font-weight:700;letter-spacing:2px;">
+                                Dream Events
+                            </h1>
+                            <p style="margin:6px 0 0;color:rgba(255,255,255,0.85);font-size:13px;letter-spacing:1px;">
+                                Hacé realidad tu evento soñado
+                            </p>
+                        </td>
+                    </tr>
+
+                    <!-- Ícono de check -->
+                    <tr>
+                        <td align="center" style="padding:36px 30px 10px;">
+                            <div style="width:70px;height:70px;background:linear-gradient(135deg,#770981,#5761c8);border-radius:50%;display:inline-flex;align-items:center;justify-content:center;margin-bottom:4px;">
+                                <span style="font-size:34px;line-height:70px;color:#fff;">✓</span>
+                            </div>
+                        </td>
+                    </tr>
+
+                    <!-- Título y mensaje principal -->
+                    <tr>
+                        <td style="padding:10px 40px 20px;text-align:center;">
+                            <h2 style="margin:0 0 12px;color:#333333;font-family:'Raleway',Arial,sans-serif;font-size:22px;">
+                                ¡Bienvenido/a, ${nombre}!
+                            </h2>
+                            <p style="margin:0;color:#555555;font-size:15px;line-height:1.7;">
+                                Tu cuenta en <strong>Dream Events</strong> fue creada exitosamente a través de
+                                <strong style="color:#770981;">Google</strong>.
+                                Ya podés acceder a todos los servicios de nuestra plataforma.
+                            </p>
+                        </td>
+                    </tr>
+
+                    <!-- Separador -->
+                    <tr>
+                        <td style="padding:0 40px;">
+                            <hr style="border:none;border-top:1px solid #eeeeee;" />
+                        </td>
+                    </tr>
+
+                    <!-- Detalles de la cuenta -->
+                    <tr>
+                        <td style="padding:24px 40px;">
+                            <p style="margin:0 0 14px;color:#333333;font-size:14px;font-weight:600;">
+                                Detalle de tu cuenta:
+                            </p>
+                            <table width="100%" cellpadding="0" cellspacing="0">
+                                <tr>
+                                    <td style="padding:10px 14px;background:#f9f5ff;border-radius:8px;border-left:4px solid #770981;">
+                                        <span style="font-size:13px;color:#555;">📧 Email verificado con Google</span>
+                                        <br/>
+                                        <span style="font-size:13px;color:#555;">🔐 Acceso seguro mediante OAuth 2.0</span>
+                                        <br/>
+                                        <span style="font-size:13px;color:#555;">👤 Rol asignado: <strong>Cliente</strong></span>
+                                    </td>
+                                </tr>
+                            </table>
+                        </td>
+                    </tr>
+
+                    <!-- Botón CTA -->
+                    <tr>
+                        <td align="center" style="padding:10px 40px 36px;">
+                            <a href="${process.env.FRONTEND_URL || 'http://localhost:5173'}"
+                               style="display:inline-block;background:linear-gradient(to right,#770981,#5761c8);color:#ffffff;text-decoration:none;padding:14px 36px;border-radius:8px;font-size:15px;font-weight:600;letter-spacing:0.5px;">
+                                Ingresar a Dream Events
+                            </a>
+                        </td>
+                    </tr>
+
+                    <!-- Separador -->
+                    <tr>
+                        <td style="padding:0 40px;">
+                            <hr style="border:none;border-top:1px solid #eeeeee;" />
+                        </td>
+                    </tr>
+
+                    <!-- Footer -->
+                    <tr>
+                        <td style="padding:24px 40px;text-align:center;">
+                            <p style="margin:0;color:#999999;font-size:12px;line-height:1.6;">
+                                Si no creaste esta cuenta, podés ignorar este correo.<br/>
+                                &copy; ${new Date().getFullYear()} Dream Events. Todos los derechos reservados.
+                            </p>
+                        </td>
+                    </tr>
+
+                </table>
+            </td>
+        </tr>
+    </table>
+</body>
+</html>
+    `.trim();
+
+    await transporter.sendMail({
+        from: `"Dream Events" <${process.env.EMAIL_USER}>`,
+        to: toEmail,
+        subject: '¡Bienvenido/a a Dream Events! Tu registro fue exitoso',
+        html: htmlContent,
+    });
+};

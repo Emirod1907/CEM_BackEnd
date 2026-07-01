@@ -4,6 +4,7 @@ declare global {
   namespace Express {
     interface Request {
       persona?: JwtPayload;
+      rawBody?: Buffer;
     }
   }
 }

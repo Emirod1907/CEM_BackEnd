@@ -28,13 +28,15 @@ cuit INT (20),
 FOREIGN KEY (persona_id) REFERENCES personas(id_persona)
 )engine=innoDB;
 
-CREATE TABLE bodegas(
+CREATE TABLE salones(
 id_bodega INT NOT NULL PRIMARY KEY AUTO_INCREMENT,
-nombre VARCHAR (30),
-domicilio VARCHAR (30),
+nombre VARCHAR(100),
+domicilio VARCHAR(150),
 descripcion VARCHAR(200),
-imagen VARCHAR(30),
-aforo INT NOT NULL
+imagen VARCHAR(500),
+aforo INT NOT NULL,
+latitud FLOAT NULL,
+longitud FLOAT NULL
 )engine=innoDB;
 
 CREATE TABLE eventos(
@@ -44,9 +46,9 @@ nombre VARCHAR(30),
 descripcion VARCHAR(200),
 fecha DATE,
 precio DOUBLE,
-imagen VARCHAR(30),
+imagen VARCHAR(500),
 cupo INT NOT NULL,
-FOREIGN KEY (bodega_id) REFERENCES bodegas(id_bodega)
+FOREIGN KEY (bodega_id) REFERENCES salones(id_bodega)
 )engine=innoDB;
 
 CREATE TABLE reservas(
@@ -54,7 +56,7 @@ id_reserva INT AUTO_INCREMENT PRIMARY KEY NOT NULL,
 evento_id INT NOT NULL,
 bodega_id INT NOT NULL,
 fecha DATETIME,
-FOREIGN KEY (bodega_id) REFERENCES bodegas(id_bodega),
+FOREIGN KEY (bodega_id) REFERENCES salones(id_bodega),
 FOREIGN KEY (evento_id) REFERENCES eventos(id_evento)
 )engine=innoDB;
 

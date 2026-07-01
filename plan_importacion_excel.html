@@ -1,0 +1,603 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>CEM — Feature: Importación masiva de servicios desde Excel</title>
+<style>
+  :root {
+    --bg: #0f1117;
+    --surface: #1a1d27;
+    --surface2: #232636;
+    --border: #2e3250;
+    --accent: #7c6fff;
+    --accent2: #5b8fff;
+    --green: #3ecf8e;
+    --yellow: #f5c518;
+    --red: #f55757;
+    --text: #e2e6f0;
+    --muted: #8892a4;
+    --code-bg: #141720;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', system-ui, sans-serif; font-size: 15px; line-height: 1.7; }
+
+  header { background: linear-gradient(135deg, #1a1d27 0%, #151825 100%); border-bottom: 1px solid var(--border); padding: 36px 48px 28px; }
+  header h1 { font-size: 26px; font-weight: 700; color: #fff; letter-spacing: -0.5px; }
+  header .meta { margin-top: 8px; color: var(--muted); font-size: 13px; display: flex; gap: 24px; flex-wrap: wrap; }
+  header .badge { display: inline-block; background: var(--accent); color: #fff; border-radius: 999px; font-size: 11px; font-weight: 700; padding: 2px 10px; letter-spacing: .5px; }
+
+  main { max-width: 1000px; margin: 0 auto; padding: 40px 32px 80px; }
+
+  section { margin-bottom: 48px; }
+  h2 { font-size: 18px; font-weight: 700; color: #fff; border-left: 3px solid var(--accent); padding-left: 12px; margin-bottom: 20px; }
+  h3 { font-size: 14px; font-weight: 700; color: var(--accent2); text-transform: uppercase; letter-spacing: .8px; margin: 24px 0 10px; }
+
+  p { color: var(--text); margin-bottom: 12px; }
+
+  /* cards */
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 20px 24px; margin-bottom: 16px; }
+  .card.highlight { border-color: var(--accent); }
+
+  /* table */
+  table { width: 100%; border-collapse: collapse; font-size: 13.5px; margin-bottom: 8px; }
+  th { background: var(--surface2); color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .7px; padding: 9px 14px; text-align: left; border-bottom: 1px solid var(--border); }
+  td { padding: 9px 14px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  tr:last-child td { border-bottom: none; }
+  td.req { color: var(--red); font-weight: 700; font-size: 12px; }
+  td.opt { color: var(--muted); font-size: 12px; }
+  td.green { color: var(--green); }
+  td code { background: var(--code-bg); border-radius: 4px; padding: 1px 6px; font-size: 12px; font-family: 'Cascadia Code', 'Fira Mono', monospace; color: #b5c3ff; }
+
+  /* code block */
+  pre { background: var(--code-bg); border: 1px solid var(--border); border-radius: 8px; padding: 18px 20px; font-size: 13px; font-family: 'Cascadia Code', 'Fira Mono', monospace; color: #b5c3ff; overflow-x: auto; margin-bottom: 16px; line-height: 1.6; }
+  .kw { color: #c792ea; }
+  .str { color: #c3e88d; }
+  .cmt { color: #546e7a; }
+  .fn { color: #82aaff; }
+  .num { color: #f78c6c; }
+  .type { color: #ffcb6b; }
+
+  /* flow steps */
+  .flow { display: flex; flex-direction: column; gap: 0; }
+  .step { display: flex; gap: 16px; padding: 16px 0; border-bottom: 1px solid var(--border); }
+  .step:last-child { border-bottom: none; }
+  .step-num { flex-shrink: 0; width: 32px; height: 32px; border-radius: 50%; background: var(--accent); color: #fff; font-weight: 800; font-size: 14px; display: flex; align-items: center; justify-content: center; margin-top: 2px; }
+  .step-body h4 { color: #fff; font-size: 14px; font-weight: 700; margin-bottom: 4px; }
+  .step-body p { margin-bottom: 0; font-size: 13.5px; color: var(--muted); }
+  .step-body code { background: var(--code-bg); border-radius: 4px; padding: 1px 6px; font-size: 12px; font-family: monospace; color: #b5c3ff; }
+
+  /* file list */
+  .file-list { list-style: none; display: flex; flex-direction: column; gap: 10px; }
+  .file-list li { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 12px 16px; display: flex; align-items: center; gap: 12px; font-size: 13.5px; }
+  .file-list li .icon { font-size: 18px; width: 28px; text-align: center; flex-shrink: 0; }
+  .file-list li .path { color: var(--accent2); font-family: monospace; font-size: 13px; }
+  .file-list li .action { margin-left: auto; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 999px; }
+  .action.new { background: rgba(62,207,142,.15); color: var(--green); }
+  .action.mod { background: rgba(245,197,24,.12); color: var(--yellow); }
+
+  /* endpoint cards */
+  .endpoint { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; margin-bottom: 16px; overflow: hidden; }
+  .endpoint-header { display: flex; align-items: center; gap: 14px; padding: 14px 20px; border-bottom: 1px solid var(--border); background: var(--surface2); }
+  .method { font-size: 11px; font-weight: 800; padding: 3px 10px; border-radius: 6px; letter-spacing: .5px; }
+  .method.get  { background: rgba(62,207,142,.15); color: var(--green); }
+  .method.post { background: rgba(124,111,255,.2); color: var(--accent); }
+  .endpoint-path { font-family: monospace; font-size: 14px; color: #fff; }
+  .endpoint-desc { margin-left: auto; font-size: 12px; color: var(--muted); }
+  .endpoint-body { padding: 16px 20px; font-size: 13.5px; }
+  .endpoint-body p { margin-bottom: 6px; color: var(--muted); }
+
+  /* pill */
+  .pill { display: inline-block; border-radius: 999px; font-size: 11px; font-weight: 700; padding: 2px 9px; letter-spacing: .3px; margin-right: 4px; }
+  .pill.auth { background: rgba(91,143,255,.15); color: var(--accent2); }
+  .pill.contrato { background: rgba(245,197,24,.12); color: var(--yellow); }
+  .pill.admin { background: rgba(245,87,87,.15); color: var(--red); }
+  .pill.multer { background: rgba(62,207,142,.12); color: var(--green); }
+
+  /* formula box */
+  .formula { background: var(--code-bg); border: 1px solid var(--accent); border-radius: 10px; padding: 18px 24px; margin: 16px 0; text-align: center; }
+  .formula .eq { font-size: 18px; color: var(--accent2); font-family: monospace; font-weight: 700; }
+  .formula .note { font-size: 12px; color: var(--muted); margin-top: 8px; }
+
+  /* alert */
+  .alert { border-radius: 8px; padding: 14px 18px; margin: 16px 0; font-size: 13.5px; display: flex; gap: 12px; }
+  .alert.warn { background: rgba(245,197,24,.08); border: 1px solid rgba(245,197,24,.3); color: var(--yellow); }
+  .alert.info { background: rgba(91,143,255,.08); border: 1px solid rgba(91,143,255,.3); color: var(--accent2); }
+  .alert.ok { background: rgba(62,207,142,.08); border: 1px solid rgba(62,207,142,.3); color: var(--green); }
+  .alert-icon { font-size: 18px; flex-shrink: 0; }
+
+  /* grid */
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 640px) { .grid2 { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <span class="badge">FEATURE 4</span>
+    <h1 style="margin-top:8px">Importación masiva de servicios desde Excel</h1>
+  </div>
+  <div class="meta">
+    <span>CEM BackEnd — Express / TypeScript / Sequelize</span>
+    <span>Dependencias: <strong>xlsx (SheetJS)</strong> · <strong>multer</strong></span>
+    <span>Fecha plan: 2026-06-03</span>
+  </div>
+</header>
+
+<main>
+
+<!-- ── CONTEXTO ─────────────────────────────────────────────────────────────── -->
+<section>
+  <h2>Contexto y objetivo</h2>
+  <p>
+    El proveedor puede crear sus servicios/productos uno por uno desde la UI, pero cuando tiene un catálogo
+    de decenas de ítems, el proceso manual es lento. Esta feature permite subir un archivo <strong>.xlsx</strong>
+    con toda su tienda de una vez.
+  </p>
+  <div class="grid2">
+    <div class="card highlight">
+      <h3>Qué hace el proveedor</h3>
+      <ol style="padding-left:18px; color:var(--muted); font-size:13.5px; line-height:2;">
+        <li>Descarga la plantilla Excel desde CEM</li>
+        <li>Rellena sus productos con precios base</li>
+        <li>Sube el archivo → obtiene un preview</li>
+        <li>Confirma → los productos se crean en su tienda</li>
+        <li>Agrega imágenes manualmente después</li>
+      </ol>
+    </div>
+    <div class="card">
+      <h3>Qué hace el sistema</h3>
+      <ol style="padding-left:18px; color:var(--muted); font-size:13.5px; line-height:2;">
+        <li>Parsea el Excel con SheetJS</li>
+        <li>Valida cada fila (tipo, enum, requeridos)</li>
+        <li>Calcula el precio público con la comisión del contrato</li>
+        <li>Devuelve preview con errores por fila</li>
+        <li>En confirmar: bulkCreate solo las filas válidas</li>
+      </ol>
+    </div>
+  </div>
+</section>
+
+<!-- ── PRECIO ──────────────────────────────────────────────────────────────── -->
+<section>
+  <h2>Cálculo de precio — regla central</h2>
+  <div class="formula">
+    <div class="eq">precio_público = precio_base × (1 + comisión_cliente / 100)</div>
+    <div class="note">
+      <code>precio_base</code> = lo que el proveedor quiere recibir (viene del Excel)<br/>
+      <code>comisión_cliente</code> = <code>Contrato.comision_cliente_porcentaje</code> del contrato vigente del proveedor (Feature 1, inmutable)<br/>
+      <code>precio</code> (columna existente en ServiciosAdicionales) = precio_público = lo que ve el cliente
+    </div>
+  </div>
+  <div class="alert warn">
+    <span class="alert-icon">⚠</span>
+    <span>
+      El precio público <strong>nunca</strong> se lee del Excel — siempre se recalcula desde el contrato.
+      Si el Excel tuviese una columna "precio_publico", se ignora. Esto previene que un proveedor
+      manipule precios eludiendo la comisión.
+    </span>
+  </div>
+  <div class="alert ok">
+    <span class="alert-icon">✓</span>
+    <span>
+      <code>contratoVigenteRequired</code> ya está disponible y se aplica a estos endpoints — si el proveedor no tiene
+      contrato vigente, no puede importar. La comisión está garantizada de existir cuando llega al controller.
+    </span>
+  </div>
+</section>
+
+<!-- ── COLUMNAS EXCEL ──────────────────────────────────────────────────────── -->
+<section>
+  <h2>Formato del Excel — columnas esperadas</h2>
+  <p>La primera fila debe ser el encabezado. Los nombres de columna son <strong>insensibles a mayúsculas y espacios</strong> (se normalizan al parsear).</p>
+  <table>
+    <thead>
+      <tr><th>Columna</th><th>Tipo</th><th>Oblig.</th><th>Valores válidos / notas</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code>nombre</code></td>
+        <td>texto</td>
+        <td class="req">✦ Requerido</td>
+        <td>Máx. 255 chars. No puede estar vacío.</td>
+      </tr>
+      <tr>
+        <td><code>descripcion</code></td>
+        <td>texto</td>
+        <td class="opt">Opcional</td>
+        <td>Máx. 500 chars. Default vacío.</td>
+      </tr>
+      <tr>
+        <td><code>precio_base</code></td>
+        <td>número</td>
+        <td class="req">✦ Requerido</td>
+        <td>Positivo, sin símbolo $. Lo que recibe el proveedor.</td>
+      </tr>
+      <tr>
+        <td><code>categoria</code></td>
+        <td>enum</td>
+        <td class="req">✦ Requerido</td>
+        <td><code>catering</code> · <code>decoracion</code> · <code>audio_video</code> · <code>seguridad</code> · <code>mobiliario</code> · <code>entretenimiento</code> · <code>otro</code></td>
+      </tr>
+      <tr>
+        <td><code>tipo_precio</code></td>
+        <td>enum</td>
+        <td class="opt">Opcional</td>
+        <td><code>fijo</code> (default) · <code>por_persona</code> · <code>por_hora</code> · <code>por_turno</code></td>
+      </tr>
+      <tr>
+        <td><code>tipo_item</code></td>
+        <td>enum</td>
+        <td class="opt">Opcional</td>
+        <td><code>producto</code> (default) · <code>servicio</code></td>
+      </tr>
+      <tr>
+        <td><code>presentacion</code></td>
+        <td>texto</td>
+        <td class="opt">Opcional</td>
+        <td>Texto libre (ej: "bandeja x12"). Se concatena al final de <code>descripcion</code>. No requiere columna nueva en DB.</td>
+      </tr>
+      <tr>
+        <td><code>capacidad_maxima</code></td>
+        <td>entero</td>
+        <td class="opt">Opcional</td>
+        <td>Cuántos eventos puede cubrir simultáneamente. NULL = sin límite.</td>
+      </tr>
+    </tbody>
+  </table>
+  <div class="alert info">
+    <span class="alert-icon">ℹ</span>
+    <span>Las imágenes <strong>no van en el Excel</strong>. El campo <code>imagen</code> se crea como <code>null</code> y el proveedor la sube después desde la UI, como ya lo hace hoy con <code>PUT /api/servicios/mis-servicios/:id</code>.</span>
+  </div>
+</section>
+
+<!-- ── CAMPO PRECIO_BASE ───────────────────────────────────────────────────── -->
+<section>
+  <h2>Campo nuevo: <code>precio_base</code> en ServiciosAdicionales</h2>
+  <p>El modelo actual solo tiene <code>precio</code> (precio público). Para preservar el precio base del proveedor necesitamos una columna nueva.</p>
+  <div class="grid2">
+    <div class="card">
+      <h3>Migración SQL</h3>
+      <p style="font-size:13px; color:var(--muted);">Archivo: <code>20260603_add_precio_base_servicios.sql</code></p>
+      <pre><span class="kw">ALTER TABLE</span> ServiciosAdicionales
+  <span class="kw">ADD COLUMN</span> precio_base <span class="type">DECIMAL</span>(<span class="num">10</span>,<span class="num">2</span>) <span class="kw">NULL</span>;</pre>
+      <p style="font-size:12px; color:var(--muted);">NULL permite que servicios creados manualmente (sin import) no tengan precio_base. En esos casos, el precio base = precio público (sin markup).</p>
+    </div>
+    <div class="card">
+      <h3>Seed (addCol)</h3>
+      <pre><span class="kw">await</span> addCol(
+  <span class="str">`ALTER TABLE ServiciosAdicionales
+   ADD COLUMN precio_base DECIMAL(10,2) NULL`</span>,
+  <span class="str">'ServiciosAdicionales.precio_base'</span>
+)</pre>
+      <p style="font-size:12px; color:var(--muted);">Se agrega al bloque de <code>addCol</code> existente en <code>seed.ts</code>, bajo los otros campos de ServiciosAdicionales.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ── ARCHIVOS ────────────────────────────────────────────────────────────── -->
+<section>
+  <h2>Archivos a crear / modificar</h2>
+  <ul class="file-list">
+    <li>
+      <span class="icon">📦</span>
+      <div>
+        <div><strong>npm install xlsx multer @types/multer</strong></div>
+        <div style="font-size:12px; color:var(--muted);">xlsx = SheetJS (parse + write Excel en Node); multer = middleware upload multipart/form-data</div>
+      </div>
+      <span class="action new">Dependencia</span>
+    </li>
+    <li>
+      <span class="icon">🗄</span>
+      <div>
+        <div class="path">src/db/migrations/20260603_add_precio_base_servicios.sql</div>
+        <div style="font-size:12px; color:var(--muted);">ALTER TABLE para agregar precio_base. Ejecutar una vez en producción.</div>
+      </div>
+      <span class="action new">Nuevo</span>
+    </li>
+    <li>
+      <span class="icon">🔷</span>
+      <div>
+        <div class="path">src/models/servicioAdicional.ts</div>
+        <div style="font-size:12px; color:var(--muted);">Agregar campo <code>precio_base?: number | null</code> al interface y al init.</div>
+      </div>
+      <span class="action mod">Modificar</span>
+    </li>
+    <li>
+      <span class="icon">🛡</span>
+      <div>
+        <div class="path">src/middlewares/uploadExcel.ts</div>
+        <div style="font-size:12px; color:var(--muted);">Multer con memoryStorage, límite 5MB, filtro MIME (xlsx/xls). Exporta <code>uploadExcel.single('archivo')</code>.</div>
+      </div>
+      <span class="action new">Nuevo</span>
+    </li>
+    <li>
+      <span class="icon">🎮</span>
+      <div>
+        <div class="path">src/controllers/importarServicios.controller.ts</div>
+        <div style="font-size:12px; color:var(--muted);">Lógica completa: parseo, validación, cálculo de precios, preview, confirmar, plantilla.</div>
+      </div>
+      <span class="action new">Nuevo</span>
+    </li>
+    <li>
+      <span class="icon">🛤</span>
+      <div>
+        <div class="path">src/routes/servicio.routes.ts</div>
+        <div style="font-size:12px; color:var(--muted);">3 rutas nuevas antes de <code>/:id</code>: plantilla-excel, importar-excel/preview, importar-excel/confirmar.</div>
+      </div>
+      <span class="action mod">Modificar</span>
+    </li>
+    <li>
+      <span class="icon">🌱</span>
+      <div>
+        <div class="path">src/db/seed.ts</div>
+        <div style="font-size:12px; color:var(--muted);">Agregar <code>addCol</code> para <code>precio_base</code>.</div>
+      </div>
+      <span class="action mod">Modificar</span>
+    </li>
+  </ul>
+</section>
+
+<!-- ── ENDPOINTS ──────────────────────────────────────────────────────────── -->
+<section>
+  <h2>Endpoints</h2>
+
+  <div class="endpoint">
+    <div class="endpoint-header">
+      <span class="method get">GET</span>
+      <span class="endpoint-path">/api/servicios/plantilla-excel</span>
+      <span class="endpoint-desc">Descargar plantilla</span>
+    </div>
+    <div class="endpoint-body">
+      <p><span class="pill auth">authRequired</span></p>
+      <p>Genera un <code>.xlsx</code> con los encabezados correctos y 2 filas de ejemplo. Devuelve con <code>Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet</code> y <code>Content-Disposition: attachment; filename="plantilla_servicios.xlsx"</code>. El proveedor la descarga, la rellena y vuelve.</p>
+    </div>
+  </div>
+
+  <div class="endpoint">
+    <div class="endpoint-header">
+      <span class="method post">POST</span>
+      <span class="endpoint-path">/api/servicios/importar-excel/preview</span>
+      <span class="endpoint-desc">Parsear sin guardar</span>
+    </div>
+    <div class="endpoint-body">
+      <p><span class="pill auth">authRequired</span> <span class="pill contrato">contratoVigenteRequired</span> <span class="pill multer">multer.single('archivo')</span></p>
+      <p>Recibe el archivo, parsea todas las filas, valida y calcula precios públicos. <strong>No guarda nada</strong>. Devuelve:</p>
+      <pre>{
+  <span class="str">"comision_aplicada"</span>: <span class="num">10</span>,          <span class="cmt">// % del contrato</span>
+  <span class="str">"filas_validas"</span>: [ { <span class="str">"fila"</span>: <span class="num">2</span>, <span class="str">"nombre"</span>: <span class="str">"Catering Premium"</span>,
+    <span class="str">"precio_base"</span>: <span class="num">80000</span>, <span class="str">"precio"</span>: <span class="num">88000</span>, <span class="str">"categoria"</span>: <span class="str">"catering"</span>, ... } ],
+  <span class="str">"filas_invalidas"</span>: [ { <span class="str">"fila"</span>: <span class="num">5</span>, <span class="str">"error"</span>: <span class="str">"precio_base inválido"</span> } ],
+  <span class="str">"total_validas"</span>: <span class="num">8</span>,
+  <span class="str">"total_invalidas"</span>: <span class="num">1</span>
+}</pre>
+      <p>El frontend muestra este resultado para que el proveedor revise antes de confirmar.</p>
+    </div>
+  </div>
+
+  <div class="endpoint">
+    <div class="endpoint-header">
+      <span class="method post">POST</span>
+      <span class="endpoint-path">/api/servicios/importar-excel/confirmar</span>
+      <span class="endpoint-desc">Guardar servicios válidos</span>
+    </div>
+    <div class="endpoint-body">
+      <p><span class="pill auth">authRequired</span> <span class="pill contrato">contratoVigenteRequired</span> <span class="pill multer">multer.single('archivo')</span></p>
+      <p>Mismo parseo + validación que preview, pero al final hace <code>ServicioAdicional.bulkCreate()</code> con las filas válidas. Las filas con error se reportan pero <strong>no abortan</strong> la importación. Devuelve:</p>
+      <pre>{
+  <span class="str">"ok"</span>: <span class="kw">true</span>,
+  <span class="str">"creados"</span>: <span class="num">8</span>,
+  <span class="str">"errores"</span>: [ { <span class="str">"fila"</span>: <span class="num">5</span>, <span class="str">"error"</span>: <span class="str">"precio_base inválido"</span> } ]
+}</pre>
+    </div>
+  </div>
+</section>
+
+<!-- ── FLUJO COMPLETO ──────────────────────────────────────────────────────── -->
+<section>
+  <h2>Flujo completo paso a paso</h2>
+  <div class="card">
+    <div class="flow">
+      <div class="step">
+        <div class="step-num">1</div>
+        <div class="step-body">
+          <h4>Proveedor descarga plantilla</h4>
+          <p><code>GET /api/servicios/plantilla-excel</code> → SheetJS genera .xlsx en memoria → browser descarga el archivo</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">2</div>
+        <div class="step-body">
+          <h4>Proveedor completa el Excel</h4>
+          <p>Rellena columnas: nombre, descripcion, precio_base, categoria, tipo_precio, tipo_item, presentacion, capacidad_maxima. No pone imágenes ni precio público.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">3</div>
+        <div class="step-body">
+          <h4>Upload para preview</h4>
+          <p><code>POST /api/servicios/importar-excel/preview</code> con el archivo en <code>multipart/form-data</code> campo <code>archivo</code>. Multer valida MIME y tamaño (máx 5MB). Controller parsea con SheetJS (<code>XLSX.read(req.file.buffer)</code>), normaliza headers, valida cada fila y calcula precios. Ninguna escritura en DB.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">4</div>
+        <div class="step-body">
+          <h4>Frontend muestra preview</h4>
+          <p>Tabla con filas válidas (nombre + precio_base + precio_público calculado + errores si hay). El proveedor puede corregir el Excel y volver al paso 3, o confirmar.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">5</div>
+        <div class="step-body">
+          <h4>Confirmación</h4>
+          <p><code>POST /api/servicios/importar-excel/confirmar</code> — mismo archivo subido de nuevo. Re-parsea (stateless), hace <code>bulkCreate</code> de las filas válidas con <code>proveedor_id</code> del usuario logueado. Responde con count de creados y lista de errores (si los hay).</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">6</div>
+        <div class="step-body">
+          <h4>Post-importación</h4>
+          <p>Servicios creados con <code>disponible: true</code>, <code>imagen: null</code>. El proveedor va a su tiendita, entra a cada item y sube imagen desde el formulario de edición existente.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── VALIDACIONES ────────────────────────────────────────────────────────── -->
+<section>
+  <h2>Validaciones por fila</h2>
+  <table>
+    <thead>
+      <tr><th>Condición de error</th><th>Mensaje devuelto</th><th>¿Aborta todo?</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Archivo vacío / sin filas de datos</td><td>"El archivo no contiene filas de datos"</td><td class="red" style="color:var(--red)">Sí (HTTP 400)</td></tr>
+      <tr><td>MIME inválido (no xlsx/xls)</td><td>"Solo se permiten archivos .xlsx o .xls"</td><td class="red" style="color:var(--red)">Sí (multer)</td></tr>
+      <tr><td>Archivo &gt; 5MB</td><td>"El archivo supera el límite de 5MB"</td><td class="red" style="color:var(--red)">Sí (multer)</td></tr>
+      <tr><td><code>nombre</code> vacío o faltante</td><td>"Fila N: nombre es requerido"</td><td class="green">No — fila saltada</td></tr>
+      <tr><td><code>precio_base</code> no numérico o ≤ 0</td><td>"Fila N: precio_base debe ser un número positivo"</td><td class="green">No — fila saltada</td></tr>
+      <tr><td><code>categoria</code> no reconocida</td><td>"Fila N: categoría inválida — valores: catering, decoracion..."</td><td class="green">No — fila saltada</td></tr>
+      <tr><td><code>tipo_precio</code> fuera del enum</td><td>"Fila N: tipo_precio inválido — valores: fijo, por_persona..."</td><td class="green">No — fila saltada</td></tr>
+      <tr><td><code>tipo_item</code> fuera del enum</td><td>"Fila N: tipo_item inválido — valores: producto, servicio"</td><td class="green">No — fila saltada</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ── CÓDIGO CLAVE ────────────────────────────────────────────────────────── -->
+<section>
+  <h2>Extractos de implementación</h2>
+
+  <h3>uploadExcel.ts — middleware multer</h3>
+  <pre><span class="kw">import</span> multer <span class="kw">from</span> <span class="str">'multer'</span>
+
+<span class="kw">const</span> MIMES_VALIDOS = <span class="kw">new</span> <span class="type">Set</span>([
+  <span class="str">'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'</span>, <span class="cmt">// .xlsx</span>
+  <span class="str">'application/vnd.ms-excel'</span>,                                          <span class="cmt">// .xls</span>
+  <span class="str">'application/octet-stream'</span>,                                           <span class="cmt">// algunos navegadores</span>
+])
+
+<span class="kw">const</span> uploadExcel = multer({
+  storage: multer.memoryStorage(),
+  limits:  { fileSize: <span class="num">5</span> * <span class="num">1024</span> * <span class="num">1024</span> }, <span class="cmt">// 5 MB</span>
+  fileFilter: (_req, file, cb) => {
+    MIMES_VALIDOS.has(file.mimetype)
+      ? cb(<span class="kw">null</span>, <span class="kw">true</span>)
+      : cb(<span class="kw">new</span> Error(<span class="str">'Solo se permiten archivos .xlsx o .xls'</span>))
+  }
+})
+
+<span class="kw">export default</span> uploadExcel</pre>
+
+  <h3>parseo de filas — normalización de headers</h3>
+  <pre><span class="kw">import</span> * <span class="kw">as</span> XLSX <span class="kw">from</span> <span class="str">'xlsx'</span>
+
+<span class="kw">function</span> <span class="fn">parsearExcel</span>(buffer: <span class="type">Buffer</span>): <span class="type">Record</span>&lt;<span class="type">string</span>, <span class="type">any</span>&gt;[] {
+  <span class="kw">const</span> wb  = XLSX.read(buffer, { type: <span class="str">'buffer'</span> })
+  <span class="kw">const</span> ws  = wb.Sheets[wb.SheetNames[<span class="num">0</span>]]
+  <span class="kw">const</span> raw = XLSX.utils.sheet_to_json&lt;<span class="type">any</span>&gt;(ws, { defval: <span class="str">''</span> })
+  <span class="cmt">// Normalizar claves: minúsculas sin espacios
+</span>  <span class="kw">return</span> raw.map(r =>
+    Object.fromEntries(
+      Object.entries(r).map(([k, v]) => [k.trim().toLowerCase().replace(/\s+/g, <span class="str">'_'</span>), v])
+    )
+  )
+}</pre>
+
+  <h3>cálculo de precio público</h3>
+  <pre><span class="kw">function</span> <span class="fn">precioPublico</span>(precio_base: <span class="type">number</span>, comisionPct: <span class="type">number</span>): <span class="type">number</span> {
+  <span class="kw">return</span> +(precio_base * (<span class="num">1</span> + comisionPct / <span class="num">100</span>)).toFixed(<span class="num">2</span>)
+}
+
+<span class="cmt">// En el controller — leer contrato vigente del proveedor autenticado</span>
+<span class="kw">const</span> contrato = <span class="kw">await</span> Contrato.findOne({
+  where: { persona_id: proveedor_id, estado: <span class="str">'vigente'</span> },
+  attributes: [<span class="str">'comision_cliente_porcentaje'</span>]
+})
+<span class="cmt">// contratoVigenteRequired garantiza que contrato existe — no null check necesario</span>
+<span class="kw">const</span> comisionPct = Number(contrato!.comision_cliente_porcentaje)</pre>
+
+  <h3>plantilla Excel generada en memoria</h3>
+  <pre><span class="kw">const</span> HEADERS = [<span class="str">'nombre'</span>,<span class="str">'descripcion'</span>,<span class="str">'precio_base'</span>,<span class="str">'categoria'</span>,
+                  <span class="str">'tipo_precio'</span>,<span class="str">'tipo_item'</span>,<span class="str">'presentacion'</span>,<span class="str">'capacidad_maxima'</span>]
+<span class="kw">const</span> EJEMPLO1 = [<span class="str">'Catering Premium'</span>,<span class="str">'Buffet completo'</span>,<span class="num">80000</span>,<span class="str">'catering'</span>,
+                  <span class="str">'fijo'</span>,<span class="str">'servicio'</span>,<span class="str">'mesa buffet'</span>,<span class="num">100</span>]
+<span class="kw">const</span> EJEMPLO2 = [<span class="str">'Sillas extra'</span>,<span class="str">'Set adicional de sillas'</span>,<span class="num">8000</span>,<span class="str">'mobiliario'</span>,
+                  <span class="str">'fijo'</span>,<span class="str">'producto'</span>,<span class="str">'set x20'</span>,<span class="kw">null</span>]
+
+<span class="kw">const</span> wb = XLSX.utils.book_new()
+<span class="kw">const</span> ws = XLSX.utils.aoa_to_sheet([HEADERS, EJEMPLO1, EJEMPLO2])
+XLSX.utils.book_append_sheet(wb, ws, <span class="str">'Servicios'</span>)
+<span class="kw">const</span> buf = XLSX.write(wb, { type: <span class="str">'buffer'</span>, bookType: <span class="str">'xlsx'</span> })
+
+res.setHeader(<span class="str">'Content-Type'</span>, <span class="str">'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'</span>)
+res.setHeader(<span class="str">'Content-Disposition'</span>, <span class="str">'attachment; filename="plantilla_servicios.xlsx"'</span>)
+res.send(buf)</pre>
+
+  <h3>routes (extracto — posición importa)</h3>
+  <pre><span class="cmt">// ⚡ Rutas específicas ANTES de /:id para evitar colisión
+</span>router.get(<span class="str">'/plantilla-excel'</span>, authRequired, getPlantillaExcel)
+router.post(<span class="str">'/importar-excel/preview'</span>,   authRequired, contratoVigenteRequired,
+  uploadExcel.single(<span class="str">'archivo'</span>), previewImportarExcel)
+router.post(<span class="str">'/importar-excel/confirmar'</span>, authRequired, contratoVigenteRequired,
+  uploadExcel.single(<span class="str">'archivo'</span>), confirmarImportarExcel)
+
+<span class="cmt">// Rutas generales (al final)
+</span>router.get(<span class="str">'/'</span>, authRequired, getServicios)
+router.post(<span class="str">'/'</span>, authRequired, crearServicio)
+router.put(<span class="str">'/:id'</span>, authRequired, updateServicio)  <span class="cmt">// ← /:id debe ir DESPUÉS</span></pre>
+</section>
+
+<!-- ── CONSIDERACIONES ─────────────────────────────────────────────────────── -->
+<section>
+  <h2>Decisiones de diseño y consideraciones</h2>
+  <div class="grid2">
+    <div class="card">
+      <h3>Stateless preview → confirmar</h3>
+      <p style="font-size:13.5px; color:var(--muted);">El archivo se sube dos veces. No hay sesión ni cache de estado entre preview y confirmar. Esto evita tener que gestionar tokens temporales, expiración de sesiones de importación, o storage de archivos. El parse es instantáneo (&lt;50ms para 1000 filas).</p>
+    </div>
+    <div class="card">
+      <h3>memoryStorage en multer</h3>
+      <p style="font-size:13.5px; color:var(--muted);">El archivo no se escribe a disco. Vive en <code>req.file.buffer</code> solo durante el request. SheetJS puede parsear desde Buffer directamente con <code>XLSX.read(buffer, { type: 'buffer' })</code>. Sin archivos temporales que limpiar.</p>
+    </div>
+    <div class="card">
+      <h3>precio_base nullable</h3>
+      <p style="font-size:13.5px; color:var(--muted);">Los servicios creados manualmente (flujo existente) no tienen precio_base. Solo los importados lo tienen. Esto no rompe nada existente — la UI actual puede ignorar el campo.</p>
+    </div>
+    <div class="card">
+      <h3>presentacion → descripcion</h3>
+      <p style="font-size:13.5px; color:var(--muted);">"bandeja x12" se concatena como <code>"Buffet frío (bandeja x12)"</code> en <code>descripcion</code>. Evita agregar otra columna al modelo. Puede extraerse visualmente en el frontend si se necesita.</p>
+    </div>
+  </div>
+  <div class="alert warn" style="margin-top:16px">
+    <span class="alert-icon">⚠</span>
+    <div>
+      <strong>MIME spoofing:</strong> Un usuario malintencionado puede subir un archivo .html renombrado a .xlsx.
+      La validación por MIME (Content-Type) que manda el browser <em>no es suficiente</em>.
+      SheetJS tirará una excepción al intentar parsear un archivo no-Excel — el try/catch lo maneja
+      y devuelve HTTP 400 con "Archivo Excel inválido o corrupto". Eso es suficiente para este caso.
+    </div>
+  </div>
+</section>
+
+<!-- ── RESUMEN ─────────────────────────────────────────────────────────────── -->
+<section>
+  <h2>Resumen de impacto</h2>
+  <table>
+    <thead><tr><th>Aspecto</th><th>Detalle</th></tr></thead>
+    <tbody>
+      <tr><td>Endpoints nuevos</td><td class="green">3 (plantilla, preview, confirmar)</td></tr>
+      <tr><td>Archivos nuevos</td><td class="green">4 (migration SQL, middleware, controller, —)</td></tr>
+      <tr><td>Archivos modificados</td><td class="green">3 (model, routes, seed)</td></tr>
+      <tr><td>Dependencias</td><td><code>xlsx</code> (SheetJS) · <code>multer</code> · <code>@types/multer</code></td></tr>
+      <tr><td>Cambio de schema DB</td><td>1 columna nullable <code>precio_base</code> en ServiciosAdicionales</td></tr>
+      <tr><td>Retrocompatibilidad</td><td class="green">100% — ningún endpoint existente cambia</td></tr>
+      <tr><td>Imágenes</td><td>No incluidas en Excel — flujo existente de edición manual</td></tr>
+    </tbody>
+  </table>
+</section>
+
+</main>
+</body>
+</html>

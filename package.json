@@ -4,7 +4,9 @@
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "nodemon dist/app.js"
+    "build": "tsc",
+    "start": "nodemon dist/app.js",
+    "dev": "nodemon --watch src --ext ts --exec \"tsc && node dist/app.js\""
   },
   "keywords": [],
   "author": "",
@@ -12,16 +14,32 @@
   "description": "",
   "dependencies": {
     "@types/dotenv": "^6.1.1",
+    "@types/multer": "^2.1.0",
+    "@types/node-cron": "^3.0.11",
+    "@types/nodemailer": "^8.0.0",
+    "@types/passport": "^1.0.17",
+    "@types/passport-google-oauth20": "^2.0.17",
     "bcryptjs": "^3.0.2",
     "body-parser": "^2.2.0",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
     "dotenv": "^17.2.0",
     "express": "^5.1.0",
+    "express-rate-limit": "^8.4.1",
     "jsonwebtoken": "^9.0.2",
+    "mercadopago": "^2.13.0",
+    "multer": "^2.1.1",
     "mysql2": "^3.14.2",
+    "node-cron": "^4.2.1",
+    "nodemailer": "^8.0.5",
+    "passport": "^0.7.0",
+    "passport-google-oauth20": "^2.0.0",
+    "qrcode": "^1.5.4",
+    "selfsigned": "^5.5.0",
     "sequelize": "^6.37.7",
     "typeorm": "^0.3.25",
+    "winston": "^3.19.0",
+    "xlsx": "^0.18.5",
     "zod": "^4.0.14"
   },
   "devDependencies": {
@@ -34,6 +52,8 @@
     "@types/express": "^5.0.3",
     "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^24.1.0",
+    "@types/qrcode": "^1.5.6",
+    "nodemon": "^3.1.14",
     "ts-node": "^10.9.2",
     "typescript": "^5.9.2"
   }
