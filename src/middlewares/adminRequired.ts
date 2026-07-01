@@ -1,9 +1,7 @@
 import { NextFunction, Request, Response } from 'express';
 import Persona from '../models/persona';
 import Rol from '../models/rol';
-
-// Emails con acceso total sin importar el rol activo (para testeo con múltiples perfiles)
-const EMAILS_FULL_ACCESS = ['emi.electro2012@gmail.com', 'emi.rodri1907guez@gmail.com'];
+import { EMAILS_PERMITIDOS as EMAILS_FULL_ACCESS } from '../config/emailsPermitidos';
 
 const adminRequired = async (req: Request, res: Response, next: NextFunction) => {
     try {
