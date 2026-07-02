@@ -7,7 +7,7 @@ import { logger } from '../libs/logger'
 // ── Constantes de validación ───────────────────────────────────────────────────
 const CATEGORIAS_VALIDAS = new Set([
     'catering', 'decoracion', 'audio_video', 'seguridad',
-    'mobiliario', 'entretenimiento', 'otro',
+    'mobiliario', 'entretenimiento', 'bebidas', 'comida', 'otro',
 ])
 const TIPOS_PRECIO_VALIDOS = new Set(['fijo', 'por_persona', 'por_hora', 'por_turno'])
 const TIPOS_ITEM_VALIDOS   = new Set(['producto', 'servicio'])
@@ -22,6 +22,8 @@ interface FilaValida {
     tipo_precio: string
     tipo_item: string
     capacidad_maxima: number | null
+    descuento_cantidad_min: number | null
+    descuento_porcentaje: number | null
 }
 
 interface FilaInvalida {
@@ -53,12 +55,15 @@ function precioPublico(precio_base: number, comisionPct: number): number {
 function validarFila(row: Record<string, any>, idx: number): FilaValida | FilaInvalida {
     const num = idx + 2 // fila del Excel (1=header, datos desde 2)
 
-    const nombre = String(row.nombre ?? '').trim()
-    if (!nombre) return { fila: num, error: 'nombre es requerido' }
+    // Acepta "producto" (planilla de tienda) o "nombre" (planilla genérica)
+    const nombre = String(row.producto ?? row.nombre ?? '').trim()
+    if (!nombre) return { fila: num, error: 'producto (nombre) es requerido' }
 
-    const precioRaw = Number(row.precio_base)
-    if (!row.precio_base && row.precio_base !== 0 || isNaN(precioRaw) || precioRaw <= 0) {
-        return { fila: num, error: 'precio_base debe ser un número mayor a 0' }
+    // Acepta "precio" o "precio_base"
+    const precioCampo = row.precio ?? row.precio_base
+    const precioRaw = Number(precioCampo)
+    if ((!precioCampo && precioCampo !== 0) || isNaN(precioRaw) || precioRaw <= 0) {
+        return { fila: num, error: 'precio debe ser un número mayor a 0' }
     }
 
     const categoria = String(row.categoria ?? '').trim().toLowerCase()
@@ -102,6 +107,27 @@ function validarFila(row: Record<string, any>, idx: number): FilaValida | FilaIn
         descripcion = descripcion ? `${descripcion} (${presentacion})` : presentacion
     }
 
+    // Descuento por cantidad: "% descuento a partir de X unidades".
+    // Las dos columnas van juntas (si se carga una, se exige la otra).
+    let descuento_cantidad_min: number | null = null
+    let descuento_porcentaje: number | null = null
+    const cantMinRaw = row.cantidad_min_descuento ?? row.cantidad_minima ?? row.cant_min
+    const descRaw    = row.descuento_porcentaje ?? row.descuento ?? row.porcentaje_descuento
+    const hayCant = cantMinRaw !== '' && cantMinRaw != null
+    const hayDesc = descRaw !== '' && descRaw != null
+    if (hayCant || hayDesc) {
+        const cm = Number(cantMinRaw)
+        const dp = Number(descRaw)
+        if (!hayCant || isNaN(cm) || cm <= 1 || !Number.isInteger(cm)) {
+            return { fila: num, error: 'cantidad_min_descuento debe ser un entero mayor a 1 (o dejar vacías ambas columnas de descuento)' }
+        }
+        if (!hayDesc || isNaN(dp) || dp <= 0 || dp > 100) {
+            return { fila: num, error: 'descuento_porcentaje debe estar entre 1 y 100' }
+        }
+        descuento_cantidad_min = cm
+        descuento_porcentaje = dp
+    }
+
     return {
         fila: num,
         nombre,
@@ -112,6 +138,8 @@ function validarFila(row: Record<string, any>, idx: number): FilaValida | FilaIn
         tipo_precio: tipoPrecio,
         tipo_item:   tipoItem,
         capacidad_maxima,
+        descuento_cantidad_min,
+        descuento_porcentaje,
     }
 }
 
@@ -147,24 +175,39 @@ function procesarFilas(
 // ── GET /api/servicios/plantilla-excel ────────────────────────────────────────
 export const getPlantillaExcel: RequestHandler = (_req, res, next) => {
     try {
-        const HEADERS  = ['nombre', 'descripcion', 'precio_base', 'categoria', 'tipo_precio', 'tipo_item', 'presentacion', 'capacidad_maxima']
-        const EJEMPLO1 = ['Catering Premium', 'Buffet completo para grupos', 80000, 'catering', 'fijo', 'servicio', 'mesa buffet', 100]
-        const EJEMPLO2 = ['Sillas extra', 'Set adicional de sillas', 8000, 'mobiliario', 'fijo', 'producto', 'set x20', '']
+        // Planilla de productos de tienda: producto, presentación, precio, categoría,
+        // y el descuento por volumen (a partir de X unidades, Y% off)
+        const HEADERS  = ['producto', 'presentacion', 'precio', 'categoria', 'cantidad_min_descuento', 'descuento_porcentaje']
+        const EJEMPLO1 = ['Gaseosa Cola', 'Botella 2.25L', 2500, 'bebidas', 12, 10]
+        const EJEMPLO2 = ['Agua mineral', 'Pack x6 500ml', 3000, 'bebidas', 24, 15]
+        const EJEMPLO3 = ['Papas fritas', 'Paquete 500g',  1800, 'comida', '', '']
 
         const wb = XLSX.utils.book_new()
-        const ws = XLSX.utils.aoa_to_sheet([HEADERS, EJEMPLO1, EJEMPLO2])
+        const ws = XLSX.utils.aoa_to_sheet([HEADERS, EJEMPLO1, EJEMPLO2, EJEMPLO3])
 
         // Ancho de columnas
         ws['!cols'] = [
-            { wch: 25 }, { wch: 35 }, { wch: 14 }, { wch: 16 },
-            { wch: 14 }, { wch: 12 }, { wch: 20 }, { wch: 18 },
+            { wch: 24 }, { wch: 22 }, { wch: 12 }, { wch: 14 }, { wch: 22 }, { wch: 20 },
         ]
 
-        XLSX.utils.book_append_sheet(wb, ws, 'Servicios')
+        // Hoja de referencia con las categorías válidas
+        const wsRef = XLSX.utils.aoa_to_sheet([
+            ['Categorías válidas'],
+            ['bebidas'], ['comida'], ['catering'], ['decoracion'],
+            ['audio_video'], ['mobiliario'], ['seguridad'], ['entretenimiento'], ['otro'],
+            [''],
+            ['Descuento por cantidad (opcional):'],
+            ['Dejá ambas columnas vacías si el producto no tiene descuento.'],
+            ['Si las completás: cantidad_min_descuento = desde cuántas unidades aplica; descuento_porcentaje = 1 a 100.'],
+        ])
+        wsRef['!cols'] = [{ wch: 70 }]
+
+        XLSX.utils.book_append_sheet(wb, ws, 'Productos')
+        XLSX.utils.book_append_sheet(wb, wsRef, 'Instrucciones')
         const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' }) as Buffer
 
         res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
-        res.setHeader('Content-Disposition', 'attachment; filename="plantilla_servicios.xlsx"')
+        res.setHeader('Content-Disposition', 'attachment; filename="plantilla_productos.xlsx"')
         res.send(buf)
     } catch (err) {
         next(err)
@@ -253,6 +296,8 @@ export const confirmarImportarExcel: RequestHandler = async (req: any, res, next
             tipo_precio:     f.tipo_precio,
             tipo_item:       f.tipo_item,
             capacidad_maxima: f.capacidad_maxima,
+            descuento_cantidad_min: f.descuento_cantidad_min,
+            descuento_porcentaje:   f.descuento_porcentaje,
             proveedor_id,
             disponible: true,
             imagen: null,

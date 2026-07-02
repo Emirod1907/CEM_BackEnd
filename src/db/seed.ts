@@ -168,7 +168,9 @@ export const seed = async () => {
         await addCol(`ALTER TABLE ServiciosAdicionales ADD COLUMN horario_inicio VARCHAR(5) NULL`, 'ServiciosAdicionales.horario_inicio')
         await addCol(`ALTER TABLE ServiciosAdicionales ADD COLUMN horario_fin VARCHAR(5) NULL`, 'ServiciosAdicionales.horario_fin')
         await addCol(`ALTER TABLE ServiciosAdicionales ADD COLUMN precios_tramos TEXT NULL`, 'ServiciosAdicionales.precios_tramos')
-        await addCol(`ALTER TABLE ServiciosAdicionales MODIFY COLUMN categoria ENUM('catering','decoracion','audio_video','seguridad','mobiliario','entretenimiento','otro') NOT NULL DEFAULT 'otro'`, 'ServiciosAdicionales.categoria_entretenimiento').catch(() => {})
+        await addCol(`ALTER TABLE ServiciosAdicionales ADD COLUMN descuento_cantidad_min INT NULL`, 'ServiciosAdicionales.descuento_cantidad_min')
+        await addCol(`ALTER TABLE ServiciosAdicionales ADD COLUMN descuento_porcentaje DECIMAL(5,2) NULL`, 'ServiciosAdicionales.descuento_porcentaje')
+        await addCol(`ALTER TABLE ServiciosAdicionales MODIFY COLUMN categoria ENUM('catering','decoracion','audio_video','seguridad','mobiliario','entretenimiento','bebidas','comida','otro') NOT NULL DEFAULT 'otro'`, 'ServiciosAdicionales.categoria_productos').catch(() => {})
 
         // Personas — nuevos campos de perfil por rol
         await addCol(`ALTER TABLE Personas ADD COLUMN perfil_completado TINYINT(1) NOT NULL DEFAULT 0`, 'Personas.perfil_completado')

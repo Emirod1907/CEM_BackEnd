@@ -19,6 +19,8 @@ interface ServicioAtributos {
     horario_inicio?: string | null;     // "HH:MM"
     horario_fin?: string | null;        // "HH:MM"
     precios_tramos?: string | null;     // JSON array of pricing tiers
+    descuento_cantidad_min?: number | null; // a partir de esta cantidad aplica el descuento
+    descuento_porcentaje?: number | null;   // % de descuento por comprar en volumen
 }
 
 class ServicioAdicional extends Model<ServicioAtributos> implements ServicioAtributos {
@@ -39,6 +41,8 @@ class ServicioAdicional extends Model<ServicioAtributos> implements ServicioAtri
     declare horario_inicio: string | null;
     declare horario_fin: string | null;
     declare precios_tramos: string | null;
+    declare descuento_cantidad_min: number | null;
+    declare descuento_porcentaje: number | null;
 }
 
 ServicioAdicional.init({
@@ -65,7 +69,7 @@ ServicioAdicional.init({
         defaultValue: null
     },
     categoria: {
-        type: DataTypes.ENUM('catering', 'decoracion', 'audio_video', 'seguridad', 'mobiliario', 'entretenimiento', 'otro'),
+        type: DataTypes.ENUM('catering', 'decoracion', 'audio_video', 'seguridad', 'mobiliario', 'entretenimiento', 'bebidas', 'comida', 'otro'),
         allowNull: false,
         defaultValue: 'otro'
     },
@@ -122,6 +126,16 @@ ServicioAdicional.init({
     },
     precios_tramos: {
         type: DataTypes.TEXT,
+        allowNull: true,
+        defaultValue: null
+    },
+    descuento_cantidad_min: {
+        type: DataTypes.INTEGER,
+        allowNull: true,
+        defaultValue: null
+    },
+    descuento_porcentaje: {
+        type: DataTypes.DECIMAL(5, 2),
         allowNull: true,
         defaultValue: null
     }
