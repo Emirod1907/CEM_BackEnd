@@ -30,9 +30,23 @@ export const getServicios: RequestHandler = async (req: Request, res: Response) 
             where: { disponible: true },
             order: [['categoria', 'ASC'], ['nombre', 'ASC']]
         });
+        // Comisión vigente por proveedor: el precio público se calcula dinámicamente
+        // (precio_base + comisión del contrato vigente), así se actualiza al aceptar/cambiar contrato
+        const proveedorIds = [...new Set(servicios.map(s => s.proveedor_id).filter(Boolean))] as number[]
+        const contratos = proveedorIds.length > 0
+            ? await Contrato.findAll({
+                where: { persona_id: proveedorIds, estado: 'vigente' },
+                attributes: ['persona_id', 'comision_cliente_porcentaje'],
+            })
+            : []
+        const comisionPorProveedor = new Map(contratos.map(c => [c.persona_id, Number(c.comision_cliente_porcentaje)]))
+
         // precio_base es info interna del proveedor — nunca sale hacia clientes/organizadores
         const serviciosFiltrados = servicios.map(s => {
             const j = s.toJSON() as any
+            const base = Number(j.precio_base ?? j.precio) || 0
+            const com = j.proveedor_id ? (comisionPorProveedor.get(j.proveedor_id) ?? 0) : 0
+            j.precio = +(base * (1 + com / 100)).toFixed(2)
             delete j.precio_base
             return j
         })
