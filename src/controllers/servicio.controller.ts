@@ -5,6 +5,22 @@ import Salon from '../models/salon';
 import Persona from '../models/persona';
 import Orden from '../models/orden';
 import AgendaProveedor from '../models/agendaProveedor';
+import Contrato from '../models/contrato';
+
+// El proveedor carga su precio base; el público paga precio_base + comisión del contrato vigente.
+async function calcularPrecioPublicoProveedor(precioBase: number, proveedor_id?: number | null): Promise<number> {
+    if (!proveedor_id) return precioBase;
+    try {
+        const contrato = await Contrato.findOne({
+            where: { persona_id: proveedor_id, estado: 'vigente' },
+            attributes: ['comision_cliente_porcentaje'],
+        });
+        const pct = contrato ? Number(contrato.comision_cliente_porcentaje) : 0;
+        return +(precioBase * (1 + pct / 100)).toFixed(2);
+    } catch {
+        return precioBase;
+    }
+}
 
 // GET /api/servicios — todos los servicios disponibles (usados en el modal del organizador)
 // Devuelve precio (precio público con markup) pero NUNCA precio_base
@@ -38,6 +54,8 @@ export const getMisServicios: RequestHandler = async (req: Request, res: Respons
         });
         const serviciosFiltrados = servicios.map(s => {
             const j = s.toJSON() as any
+            // El proveedor ve su precio base; si un ítem viejo no lo tiene, se usa el precio como fallback
+            if (j.precio_base == null) j.precio_base = j.precio
             delete j.precio  // el precio público (con markup) no se expone al proveedor
             return j
         })
@@ -140,10 +158,14 @@ export const crearServicioProveedor: RequestHandler = async (req: Request, res: 
         return res.status(400).json({ message: 'Faltan campos requeridos' });
     }
     try {
+        // El proveedor ingresa su precio base; el precio público suma la comisión del contrato
+        const precioBase = Number(precio);
+        const precioPublico = await calcularPrecioPublicoProveedor(precioBase, proveedor_id);
         const servicio = await ServicioAdicional.create({
             nombre,
             descripcion,
-            precio,
+            precio: precioPublico,
+            precio_base: precioBase,
             categoria,
             tipo_precio: tipo_precio || 'fijo',
             tipo_item: tipo_item || 'producto',
@@ -177,8 +199,18 @@ export const updateServicioProveedor: RequestHandler = async (req: Request, res:
         const { nombre, descripcion, precio, categoria, tipo_precio, tipo_item, imagen, disponible,
                 capacidad_maxima, dias_anticipacion, dias_disponibles, horario_inicio, horario_fin,
                 precios_tramos } = req.body;
+        // Si viene precio, es el precio base del proveedor: recalcular el público con la comisión
+        let precioBase = servicio.precio_base;
+        let precioPublico = servicio.precio;
+        if (precio != null && precio !== '') {
+            precioBase = Number(precio);
+            precioPublico = await calcularPrecioPublicoProveedor(precioBase, proveedor_id);
+        }
         await servicio.update({
-            nombre, descripcion, precio, categoria, tipo_precio, tipo_item, imagen, disponible,
+            nombre, descripcion,
+            precio: precioPublico,
+            precio_base: precioBase,
+            categoria, tipo_precio, tipo_item, imagen, disponible,
             capacidad_maxima: capacidad_maxima != null ? Number(capacidad_maxima) : null,
             dias_anticipacion: dias_anticipacion != null ? Number(dias_anticipacion) : servicio.dias_anticipacion,
             dias_disponibles: Array.isArray(dias_disponibles) ? JSON.stringify(dias_disponibles) : (dias_disponibles || null),
