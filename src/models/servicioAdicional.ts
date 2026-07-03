@@ -8,6 +8,7 @@ interface ServicioAtributos {
     precio: number;
     precio_base?: number | null;        // Lo que recibe el proveedor (antes de comisión)
     categoria: string;
+    subcategoria?: string | null;
     tipo_precio?: string;
     tipo_item?: string;
     disponible?: boolean;
@@ -30,6 +31,7 @@ class ServicioAdicional extends Model<ServicioAtributos> implements ServicioAtri
     declare precio: number;
     declare precio_base: number | null;
     declare categoria: string;
+    declare subcategoria: string | null;
     declare tipo_precio: string;
     declare tipo_item: string;
     declare disponible: boolean;
@@ -69,9 +71,15 @@ ServicioAdicional.init({
         defaultValue: null
     },
     categoria: {
-        type: DataTypes.ENUM('catering', 'decoracion', 'audio_video', 'seguridad', 'mobiliario', 'entretenimiento', 'bebidas', 'comida', 'otro'),
+        type: DataTypes.ENUM('catering', 'decoracion', 'audio_video', 'seguridad', 'mobiliario', 'entretenimiento', 'personal', 'tortas', 'bebidas', 'comida', 'alimentos', 'cotillon', 'vajilla', 'otro'),
         allowNull: false,
         defaultValue: 'otro'
+    },
+    // Subcategoría opcional (ej: alimentos → 'dulce' | 'salado')
+    subcategoria: {
+        type: DataTypes.STRING(30),
+        allowNull: true,
+        defaultValue: null
     },
     tipo_precio: {
         type: DataTypes.ENUM('fijo', 'por_persona', 'por_hora', 'por_turno'),

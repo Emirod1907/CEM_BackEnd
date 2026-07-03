@@ -7,7 +7,8 @@ import { logger } from '../libs/logger'
 // ── Constantes de validación ───────────────────────────────────────────────────
 const CATEGORIAS_VALIDAS = new Set([
     'catering', 'decoracion', 'audio_video', 'seguridad',
-    'mobiliario', 'entretenimiento', 'bebidas', 'comida', 'otro',
+    'mobiliario', 'entretenimiento', 'personal', 'tortas',
+    'bebidas', 'comida', 'alimentos', 'cotillon', 'vajilla', 'otro',
 ])
 const TIPOS_PRECIO_VALIDOS = new Set(['fijo', 'por_persona', 'por_hora', 'por_turno'])
 const TIPOS_ITEM_VALIDOS   = new Set(['producto', 'servicio'])

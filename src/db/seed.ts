@@ -172,6 +172,17 @@ export const seed = async () => {
         await addCol(`ALTER TABLE ServiciosAdicionales ADD COLUMN descuento_cantidad_min INT NULL`, 'ServiciosAdicionales.descuento_cantidad_min')
         await addCol(`ALTER TABLE ServiciosAdicionales ADD COLUMN descuento_porcentaje DECIMAL(5,2) NULL`, 'ServiciosAdicionales.descuento_porcentaje')
         await addCol(`ALTER TABLE ServiciosAdicionales MODIFY COLUMN categoria ENUM('catering','decoracion','audio_video','seguridad','mobiliario','entretenimiento','bebidas','comida','otro') NOT NULL DEFAULT 'otro'`, 'ServiciosAdicionales.categoria_productos').catch(() => {})
+        // Nuevas categorías: personal (mozos/bartenders) y confección de tortas como servicios;
+        // cotillon/souvenirs y vajilla como productos; comida se renombra a alimentos (dulce/salado)
+        await db.query(`ALTER TABLE ServiciosAdicionales MODIFY COLUMN categoria ENUM('catering','decoracion','audio_video','seguridad','mobiliario','entretenimiento','personal','tortas','bebidas','comida','alimentos','cotillon','vajilla','otro') NOT NULL DEFAULT 'otro'`).catch(() => {})
+        await addCol(`ALTER TABLE ServiciosAdicionales ADD COLUMN subcategoria VARCHAR(30) NULL`, 'ServiciosAdicionales.subcategoria')
+        // Migrar la categoría 'comida' (legacy) a 'alimentos'
+        await db.query(`UPDATE ServiciosAdicionales SET categoria='alimentos' WHERE categoria='comida'`).catch(() => {})
+        // Alinear tipo_item con la categoría (el formulario ya las vincula):
+        // decoración, audio/video, seguridad, personal, mobiliario y entretenimiento son SERVICIOS
+        await db.query(`UPDATE ServiciosAdicionales SET tipo_item='servicio' WHERE categoria IN ('decoracion','audio_video','seguridad','personal','mobiliario','entretenimiento','tortas')`).catch(() => {})
+        // bebidas, alimentos, catering, cotillón/souvenirs y vajilla son PRODUCTOS
+        await db.query(`UPDATE ServiciosAdicionales SET tipo_item='producto' WHERE categoria IN ('bebidas','comida','alimentos','catering','cotillon','vajilla')`).catch(() => {})
 
         // Personas — nuevos campos de perfil por rol
         await addCol(`ALTER TABLE Personas ADD COLUMN perfil_completado TINYINT(1) NOT NULL DEFAULT 0`, 'Personas.perfil_completado')

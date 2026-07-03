@@ -165,7 +165,7 @@ export const getMisReservasProveedor: RequestHandler = async (req: Request, res:
 // POST /api/servicios/mis-servicios — el proveedor crea un item en su tiendita
 export const crearServicioProveedor: RequestHandler = async (req: Request, res: Response) => {
     const proveedor_id = req.persona?.id_persona;
-    const { nombre, descripcion, precio, categoria, tipo_precio, tipo_item, imagen,
+    const { nombre, descripcion, precio, categoria, subcategoria, tipo_precio, tipo_item, imagen,
             capacidad_maxima, dias_anticipacion, dias_disponibles, horario_inicio, horario_fin,
             precios_tramos } = req.body;
     if (!nombre || !descripcion || !precio || !categoria) {
@@ -181,6 +181,7 @@ export const crearServicioProveedor: RequestHandler = async (req: Request, res: 
             precio: precioPublico,
             precio_base: precioBase,
             categoria,
+            subcategoria: subcategoria || null,
             tipo_precio: tipo_precio || 'fijo',
             tipo_item: tipo_item || 'producto',
             imagen: imagen || null,
@@ -210,7 +211,7 @@ export const updateServicioProveedor: RequestHandler = async (req: Request, res:
         if (servicio.proveedor_id !== proveedor_id) {
             return res.status(403).json({ message: 'No tenés permiso para editar este servicio' });
         }
-        const { nombre, descripcion, precio, categoria, tipo_precio, tipo_item, imagen, disponible,
+        const { nombre, descripcion, precio, categoria, subcategoria, tipo_precio, tipo_item, imagen, disponible,
                 capacidad_maxima, dias_anticipacion, dias_disponibles, horario_inicio, horario_fin,
                 precios_tramos } = req.body;
         // Si viene precio, es el precio base del proveedor: recalcular el público con la comisión
@@ -224,7 +225,7 @@ export const updateServicioProveedor: RequestHandler = async (req: Request, res:
             nombre, descripcion,
             precio: precioPublico,
             precio_base: precioBase,
-            categoria, tipo_precio, tipo_item, imagen, disponible,
+            categoria, subcategoria: subcategoria || null, tipo_precio, tipo_item, imagen, disponible,
             capacidad_maxima: capacidad_maxima != null ? Number(capacidad_maxima) : null,
             dias_anticipacion: dias_anticipacion != null ? Number(dias_anticipacion) : servicio.dias_anticipacion,
             dias_disponibles: Array.isArray(dias_disponibles) ? JSON.stringify(dias_disponibles) : (dias_disponibles || null),
