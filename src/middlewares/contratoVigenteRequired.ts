@@ -2,9 +2,10 @@ import { NextFunction, Request, Response } from 'express'
 import Contrato from '../models/contrato'
 import { VERSION_TERMINOS } from '../config/terminos'
 
-// Bloquea rutas de publicación si el usuario no tiene un contrato vigente y actualizado.
-// Debe ir DESPUÉS de authRequired en la cadena de middlewares.
-const contratoVigenteRequired = async (req: Request, res: Response, next: NextFunction) => {
+// Bloquea rutas de publicación si el usuario no tiene un contrato vigente del ámbito
+// requerido ('salon' o 'proveedor'). Debe ir DESPUÉS de authRequired.
+const contratoVigenteRequired = (ambito: 'salon' | 'proveedor') =>
+    async (req: Request, res: Response, next: NextFunction) => {
     try {
         const persona_id = req.persona?.id_persona
         if (!persona_id) {
@@ -12,7 +13,7 @@ const contratoVigenteRequired = async (req: Request, res: Response, next: NextFu
         }
 
         const contrato = await Contrato.findOne({
-            where: { persona_id, estado: 'vigente', aceptado: true },
+            where: { persona_id, estado: 'vigente', aceptado: true, ambito },
             attributes: ['id_contrato', 'version_terminos', 'fecha_aceptacion'],
         })
 
@@ -20,6 +21,7 @@ const contratoVigenteRequired = async (req: Request, res: Response, next: NextFu
             return res.status(403).json({
                 message: 'Debés aceptar los términos y condiciones antes de publicar servicios o salones.',
                 requiere_contrato: true,
+                ambito,
                 version_requerida: VERSION_TERMINOS,
             })
         }

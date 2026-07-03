@@ -146,7 +146,7 @@ function validarFila(row: Record<string, any>, idx: number): FilaValida | FilaIn
 async function resolverComision(persona_id: number): Promise<number> {
     // contratoVigenteRequired garantiza que existe — aun así fallback a 0
     const contrato = await Contrato.findOne({
-        where: { persona_id, estado: 'vigente' },
+        where: { persona_id, estado: 'vigente', ambito: 'proveedor' },
         attributes: ['comision_cliente_porcentaje'],
     })
     return contrato ? Number(contrato.comision_cliente_porcentaje) : 0

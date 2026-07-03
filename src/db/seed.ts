@@ -107,6 +107,7 @@ export const seed = async () => {
         // Reservas
         // Contratos — comisión de dos lados
         await addCol(`ALTER TABLE Contratos ADD COLUMN comision_proveedor_porcentaje DECIMAL(5,2) NOT NULL DEFAULT 3`, 'Contratos.comision_proveedor_porcentaje')
+        await addCol(`ALTER TABLE Contratos ADD COLUMN ambito ENUM('salon','proveedor') NOT NULL DEFAULT 'salon'`, 'Contratos.ambito')
         await db.query(`ALTER TABLE Contratos CHANGE COLUMN comision_porcentaje comision_cliente_porcentaje DECIMAL(5,2) NOT NULL`).catch(() => {})
 
         await addCol(`ALTER TABLE reservas ADD COLUMN estado ENUM('pendiente_pago','seña_abonada','confirmada','cancelada') NOT NULL DEFAULT 'confirmada'`, 'reservas.estado')

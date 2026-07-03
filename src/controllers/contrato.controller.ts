@@ -68,7 +68,9 @@ export const getTerminosActuales: RequestHandler = async (req, res) => {
 // Guarda snapshot inmutable: comisión, texto, hash, IP, user-agent, timestamp.
 export const aceptarContrato: RequestHandler = async (req, res) => {
     const persona_id = req.persona?.id_persona
-    const { acepto } = req.body
+    const { acepto, ambito } = req.body
+    // Un contrato por ámbito: 'salon' (dueño de salón) o 'proveedor' (servicios/productos)
+    const ambitoContrato: 'salon' | 'proveedor' = ambito === 'proveedor' ? 'proveedor' : 'salon'
 
     if (!acepto || acepto !== true) {
         return res.status(400).json({
@@ -77,9 +79,9 @@ export const aceptarContrato: RequestHandler = async (req, res) => {
     }
 
     try {
-        // Si ya existe un contrato vigente para esta versión, no crear duplicado
+        // Si ya existe un contrato vigente de este ámbito para esta versión, no duplicar
         const contratoExistente = await Contrato.findOne({
-            where: { persona_id, estado: 'vigente', version_terminos: VERSION_TERMINOS },
+            where: { persona_id, estado: 'vigente', version_terminos: VERSION_TERMINOS, ambito: ambitoContrato },
         })
         if (contratoExistente) {
             return res.status(409).json({
@@ -88,10 +90,10 @@ export const aceptarContrato: RequestHandler = async (req, res) => {
             })
         }
 
-        // Marcar contratos vigentes anteriores como 'reemplazado' antes de crear el nuevo
+        // Marcar contratos vigentes anteriores del MISMO ámbito como 'reemplazado'
         const reemplazados = await Contrato.update(
             { estado: 'reemplazado' },
-            { where: { persona_id, estado: 'vigente' } }
+            { where: { persona_id, estado: 'vigente', ambito: ambitoContrato } }
         )
         if (reemplazados[0] > 0) {
             logger.info('[Contratos] Contratos previos marcados como reemplazados', {
@@ -127,6 +129,7 @@ export const aceptarContrato: RequestHandler = async (req, res) => {
         const hash = hashTerminos()
         const contrato = await Contrato.create({
             persona_id: persona_id!,
+            ambito: ambitoContrato,
             version_terminos: VERSION_TERMINOS,
             comision_cliente_porcentaje:   comisionClienteSnapshot,
             comision_proveedor_porcentaje: comisionProveedorSnapshot,
@@ -160,9 +163,12 @@ export const aceptarContrato: RequestHandler = async (req, res) => {
 // Requiere authRequired. Devuelve el contrato vigente del usuario logueado.
 export const getMiContrato: RequestHandler = async (req, res) => {
     const persona_id = req.persona?.id_persona
+    // Consultar el contrato de un ámbito puntual (?ambito=salon|proveedor)
+    const ambitoQ = req.query.ambito
+    const ambito = ambitoQ === 'proveedor' ? 'proveedor' : ambitoQ === 'salon' ? 'salon' : null
     try {
         const contrato = await Contrato.findOne({
-            where: { persona_id, estado: 'vigente' },
+            where: { persona_id, estado: 'vigente', ...(ambito ? { ambito } : {}) },
             order: [['fecha_aceptacion', 'DESC']],
         })
 

@@ -206,7 +206,7 @@ export const crearPreferenciaOrganizador: RequestHandler = async (req: Request, 
             const salonData = await Salon.findByPk(reserva.salon_id, { attributes: ['dueno_id'] })
             if ((salonData as any)?.dueno_id) {
                 const contrato = await Contrato.findOne({
-                    where: { persona_id: (salonData as any).dueno_id, estado: 'vigente' },
+                    where: { persona_id: (salonData as any).dueno_id, estado: 'vigente', ambito: 'salon' },
                     attributes: ['comision_cliente_porcentaje'],
                 })
                 if (contrato) comisionClientePct = Number(contrato.comision_cliente_porcentaje)

@@ -14,8 +14,8 @@ router.post('/mi-salon/reservas/manual', authRequired, crearReservaManual)
 router.put('/mi-salon/reservas/:id/estado', authRequired, gestionarReservaDueno)
 router.get('/:id/disponibilidad', authRequired, getDisponibilidadSalon)
 router.get('/:id', authRequired, getSalon)
-router.post('/new', authRequired, contratoVigenteRequired, crearSalon)
-router.put('/:id', authRequired, contratoVigenteRequired, updateSalon)
+router.post('/new', authRequired, contratoVigenteRequired('salon'), crearSalon)
+router.put('/:id', authRequired, contratoVigenteRequired('salon'), updateSalon)
 router.delete('/:id', authRequired, deleteSalon)
 
 export default router;

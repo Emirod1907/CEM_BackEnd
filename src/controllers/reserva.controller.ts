@@ -171,7 +171,7 @@ export const solicitarReserva: RequestHandler = async (req: Request, res: Respon
         let comision_cliente_porcentaje = 0;
         if ((salon as any).dueno_id) {
             const contrato = await Contrato.findOne({
-                where: { persona_id: (salon as any).dueno_id, estado: 'vigente' },
+                where: { persona_id: (salon as any).dueno_id, estado: 'vigente', ambito: 'salon' },
                 attributes: ['comision_cliente_porcentaje'],
                 transaction: t
             });
@@ -277,7 +277,7 @@ export const getMisReservas: RequestHandler = async (req: Request, res: Response
         const duenioIds = [...new Set([...duenoPorSalon.values()].filter(Boolean))]
         const contratos = duenioIds.length > 0
             ? await Contrato.findAll({
-                where: { persona_id: duenioIds, estado: 'vigente' },
+                where: { persona_id: duenioIds, estado: 'vigente', ambito: 'salon' },
                 attributes: ['persona_id', 'comision_cliente_porcentaje']
             })
             : []
@@ -346,7 +346,7 @@ export const getReservaDetalle: RequestHandler = async (req: Request, res: Respo
             const salonData = await Salon.findByPk(reserva.salon_id, { attributes: ['dueno_id'] });
             if ((salonData as any)?.dueno_id) {
                 const contrato = await Contrato.findOne({
-                    where: { persona_id: (salonData as any).dueno_id, estado: 'vigente' },
+                    where: { persona_id: (salonData as any).dueno_id, estado: 'vigente', ambito: 'salon' },
                     attributes: ['comision_cliente_porcentaje'],
                 });
                 if (contrato) comision_cliente_porcentaje = Number(contrato.comision_cliente_porcentaje);

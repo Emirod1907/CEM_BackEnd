@@ -14,7 +14,7 @@ async function calcularPrecioPublico(precio_alquiler: number, dueno_id: number |
     if (!dueno_id) return precio_alquiler
     try {
         const contrato = await Contrato.findOne({
-            where: { persona_id: dueno_id, estado: 'vigente' },
+            where: { persona_id: dueno_id, estado: 'vigente', ambito: 'salon' },
             attributes: ['comision_cliente_porcentaje'],
         })
         const pct = contrato ? Number(contrato.comision_cliente_porcentaje) : 0

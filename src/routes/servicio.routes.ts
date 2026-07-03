@@ -29,14 +29,14 @@ const router = Router();
 
 // ── Importación masiva desde Excel (ANTES de /:id para no colisionar) ──────────
 router.get('/plantilla-excel', authRequired, getPlantillaExcel);
-router.post('/importar-excel/preview',   authRequired, contratoVigenteRequired, uploadExcel.single('archivo'), previewImportarExcel);
-router.post('/importar-excel/confirmar', authRequired, contratoVigenteRequired, uploadExcel.single('archivo'), confirmarImportarExcel);
+router.post('/importar-excel/preview',   authRequired, contratoVigenteRequired('proveedor'), uploadExcel.single('archivo'), previewImportarExcel);
+router.post('/importar-excel/confirmar', authRequired, contratoVigenteRequired('proveedor'), uploadExcel.single('archivo'), confirmarImportarExcel);
 
 // Rutas de la tiendita del proveedor (deben ir ANTES de /:id para no colisionar)
 router.get('/mis-servicios', authRequired, getMisServicios);
 router.get('/mis-reservas', authRequired, getMisReservasProveedor);
-router.post('/mis-servicios', authRequired, contratoVigenteRequired, crearServicioProveedor);
-router.put('/mis-servicios/:id', authRequired, contratoVigenteRequired, updateServicioProveedor);
+router.post('/mis-servicios', authRequired, contratoVigenteRequired('proveedor'), crearServicioProveedor);
+router.put('/mis-servicios/:id', authRequired, contratoVigenteRequired('proveedor'), updateServicioProveedor);
 router.delete('/mis-servicios/:id', authRequired, deleteServicioProveedor);
 
 // Agenda del proveedor

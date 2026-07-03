@@ -12,7 +12,7 @@ async function calcularPrecioPublicoProveedor(precioBase: number, proveedor_id?:
     if (!proveedor_id) return precioBase;
     try {
         const contrato = await Contrato.findOne({
-            where: { persona_id: proveedor_id, estado: 'vigente' },
+            where: { persona_id: proveedor_id, estado: 'vigente', ambito: 'proveedor' },
             attributes: ['comision_cliente_porcentaje'],
         });
         const pct = contrato ? Number(contrato.comision_cliente_porcentaje) : 0;
@@ -35,7 +35,7 @@ export const getServicios: RequestHandler = async (req: Request, res: Response) 
         const proveedorIds = [...new Set(servicios.map(s => s.proveedor_id).filter(Boolean))] as number[]
         const contratos = proveedorIds.length > 0
             ? await Contrato.findAll({
-                where: { persona_id: proveedorIds, estado: 'vigente' },
+                where: { persona_id: proveedorIds, estado: 'vigente', ambito: 'proveedor' },
                 attributes: ['persona_id', 'comision_cliente_porcentaje'],
             })
             : []

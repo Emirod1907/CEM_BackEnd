@@ -5,6 +5,7 @@ import Persona from './persona'
 interface ContratoAtributos {
     id_contrato?: number
     persona_id: number
+    ambito?: 'salon' | 'proveedor'   // un contrato por ámbito: dueño de salón y/o proveedor
     version_terminos: string
     comision_cliente_porcentaje: number
     comision_proveedor_porcentaje: number
@@ -20,6 +21,7 @@ interface ContratoAtributos {
 class Contrato extends Model<ContratoAtributos> implements ContratoAtributos {
     declare id_contrato: number
     declare persona_id: number
+    declare ambito: 'salon' | 'proveedor'
     declare version_terminos: string
     declare comision_cliente_porcentaje: number
     declare comision_proveedor_porcentaje: number
@@ -42,6 +44,11 @@ Contrato.init({
         type: DataTypes.INTEGER,
         allowNull: false,
         references: { model: 'Personas', key: 'id_persona' },
+    },
+    ambito: {
+        type: DataTypes.ENUM('salon', 'proveedor'),
+        allowNull: false,
+        defaultValue: 'salon',
     },
     version_terminos: {
         type: DataTypes.STRING(20),
