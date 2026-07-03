@@ -329,8 +329,8 @@ export const confirmarInvitados: RequestHandler = async (req: Request, res: Resp
 // POST /api/invitaciones/publica/:token/pagar
 export const pagarInvitacion: RequestHandler = async (req: Request, res: Response) => {
     const { token } = req.params
-    // tipo_pago: 'seña' (30%) | 'total' (100%, default)
-    const { tipo_pago = 'total' } = req.body
+    // El invitado SIEMPRE paga la entrada completa (no se permite seña).
+    const tipo_pago = 'total'
     const persona = (req as any).persona
 
     try {
@@ -363,14 +363,11 @@ export const pagarInvitacion: RequestHandler = async (req: Request, res: Respons
         const cantidad = invitados.length || invitacion.num_invitados
         const precioUnitario = Number(evento.precio)
         const montoTotalCompleto = precioUnitario * cantidad
-        const esSeña = tipo_pago === 'seña'
-        const montoACobrar = esSeña
-            ? Math.round(montoTotalCompleto * 0.30 * 100) / 100
-            : montoTotalCompleto
+        // El invitado siempre paga la entrada completa (sin opción de seña).
+        const esSeña = false
+        const montoACobrar = montoTotalCompleto
 
-        const tituloItem = esSeña
-            ? `Seña (30%) — ${evento.nombre}`
-            : `Entrada — ${evento.nombre}`
+        const tituloItem = `Entrada — ${evento.nombre}`
         const descripcionItem = `${cantidad} invitado(s)${esSeña ? ' · Seña del 30%' : ''}`
 
         const client = getMpClient()
