@@ -40,6 +40,7 @@ export interface ItemServicio {
     tipo_precio?: 'fijo' | 'por_persona' | 'por_hora' | 'por_turno';
     horas?: number | null;
     turnos?: number | null;
+    personas?: number | null;
     imagen?: string | null;
 }
 
@@ -193,7 +194,7 @@ export const crearPreferenciaOrganizador: RequestHandler = async (req: Request, 
         const numInvitados = Number(datosReserva.numInvitados) > 0 ? Number(datosReserva.numInvitados) : (Number(datosReserva.cupo) || 1);
         const monto_servicios = (servicios || []).reduce((acc, s) => {
             let multiplicador = 1;
-            if      (s.tipo_precio === 'por_persona') multiplicador = numInvitados;
+            if      (s.tipo_precio === 'por_persona') multiplicador = Number(s.personas) > 0 ? Number(s.personas) : numInvitados;
             else if (s.tipo_precio === 'por_hora')    multiplicador = Number(s.horas)  > 0 ? Number(s.horas)  : 1;
             else if (s.tipo_precio === 'por_turno')   multiplicador = Number(s.turnos) > 0 ? Number(s.turnos) : 1;
             return acc + Number(s.precio) * s.cantidad * multiplicador;
@@ -247,7 +248,7 @@ export const crearPreferenciaOrganizador: RequestHandler = async (req: Request, 
                 }] : []),
                 ...(servicios || []).map((s) => {
                     let multiplicador = 1;
-                    if      (s.tipo_precio === 'por_persona') multiplicador = numInvitados;
+                    if      (s.tipo_precio === 'por_persona') multiplicador = Number(s.personas) > 0 ? Number(s.personas) : numInvitados;
                     else if (s.tipo_precio === 'por_hora')    multiplicador = Number(s.horas)  > 0 ? Number(s.horas)  : 1;
                     else if (s.tipo_precio === 'por_turno')   multiplicador = Number(s.turnos) > 0 ? Number(s.turnos) : 1;
                     return {
