@@ -6,6 +6,7 @@ import { generateToken, verifyToken } from '../libs/jwt'
 import * as bcrypt from 'bcryptjs'
 import { Op } from 'sequelize'
 import { logger } from '../libs/logger'
+import { EMAILS_PERMITIDOS } from '../config/emailsPermitidos'
 
 const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
 
@@ -165,6 +166,14 @@ export const selectRole: RequestHandler = async (req: Request, res: Response) =>
 
         const persona = await Persona.findByPk(req.persona!.id_persona);
         if (!persona) return res.status(404).json({ message: 'Usuario no encontrado' });
+
+        // El rol se elige una sola vez: si la persona ya tiene rol asignado,
+        // solo las cuentas full access (testing/admin) pueden cambiarlo.
+        // Ocultar el botón en el frontend no alcanza: esta es la barrera real.
+        const esFullAccess = persona.email && EMAILS_PERMITIDOS.includes(persona.email);
+        if ((persona as any).rol_id && !esFullAccess) {
+            return res.status(403).json({ message: 'Tu rol ya fue asignado y no puede modificarse' });
+        }
 
         await persona.update({ rol_id: (rolFound as any).id_rol });
 
