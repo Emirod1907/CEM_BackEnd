@@ -7,6 +7,7 @@ import { Op } from 'sequelize';
 import { logger } from "../libs/logger";
 import { sendServiciosNotificacion } from '../services/email.service';
 import { calcularMontoAlquiler } from './reserva.controller';
+import { canManageOwnedResource } from '../services/authz.service';
 
 // Aplica la comisión del cliente (frozen en el contrato vigente del dueño) al precio base.
 // Devuelve el precio que ve y paga el cliente final.
@@ -138,10 +139,24 @@ export const actualizarPreciosSalon: RequestHandler = async (req: Request, res: 
 
 // POST /api/salones/mi-salon/reservas/manual
 export const crearReservaManual: RequestHandler = async (req: Request, res: Response) => {
-    const { fecha, nombre_organizador, email_organizador, tipo_evento, estado, notas, enviar_notificacion } = req.body;
+    const {
+        fecha,
+        tipo_registro = 'reserva',
+        nombre_organizador,
+        email_organizador,
+        telefono_organizador,
+        tipo_evento,
+        cantidad_invitados,
+        monto_alquiler,
+        estado,
+        motivo_bloqueo,
+        notas,
+        enviar_notificacion
+    } = req.body;
 
     if (!fecha) return res.status(400).json({ message: 'La fecha es requerida' });
 
+    const esBloqueo = tipo_registro === 'bloqueo';
     const estadosValidos = ['pendiente_pago', 'seña_abonada', 'confirmada', 'cancelada'];
     if (estado && !estadosValidos.includes(estado)) {
         return res.status(400).json({ message: 'Estado inválido' });
@@ -151,7 +166,9 @@ export const crearReservaManual: RequestHandler = async (req: Request, res: Resp
         const salon = await Salon.findOne({ where: { dueno_id: req.persona!.id_persona } });
         if (!salon) return res.status(404).json({ message: 'No tenés un salón registrado' });
 
-        // Verificar que no haya reserva activa en esa fecha
+        // Verificar que no haya reserva activa en esa fecha. Los bloqueos se guardan
+        // como reservas manuales confirmadas con marca en datos_evento, sin cambiar
+        // el ENUM de la columna estado. Así no requiere migración de base de datos.
         const reservaExistente = await Reserva.findOne({
             where: {
                 salon_id: salon.id_salon,
@@ -163,11 +180,22 @@ export const crearReservaManual: RequestHandler = async (req: Request, res: Resp
             return res.status(409).json({ message: 'Ya existe una reserva activa en esa fecha' });
         }
 
+        const montoBase = esBloqueo
+            ? 0
+            : (monto_alquiler !== undefined && monto_alquiler !== null && monto_alquiler !== ''
+                ? Number(monto_alquiler)
+                : Number(salon.precio_alquiler) || 0);
+
         const datos_evento = JSON.stringify({
             manual: true,
-            nombre_organizador: nombre_organizador || 'Sin nombre',
-            email_organizador: email_organizador || null,
-            tipo_evento: tipo_evento || null,
+            tipo_registro: esBloqueo ? 'bloqueo' : 'reserva',
+            bloqueo: esBloqueo,
+            nombre_organizador: esBloqueo ? 'Fecha bloqueada' : (nombre_organizador || 'Sin nombre'),
+            email_organizador: esBloqueo ? null : (email_organizador || null),
+            telefono_organizador: esBloqueo ? null : (telefono_organizador || null),
+            tipo_evento: esBloqueo ? 'Bloqueo de agenda' : (tipo_evento || null),
+            cantidad_invitados: esBloqueo ? null : (cantidad_invitados || null),
+            motivo_bloqueo: esBloqueo ? (motivo_bloqueo || notas || 'Bloqueo de agenda') : null,
             notas: notas || null,
         });
 
@@ -176,14 +204,14 @@ export const crearReservaManual: RequestHandler = async (req: Request, res: Resp
             fecha,
             persona_id: req.persona!.id_persona,
             evento_id: null as any,
-            estado: estado || 'confirmada',
+            estado: esBloqueo ? 'confirmada' : (estado || 'confirmada'),
             datos_evento,
-            monto_alquiler: Number(salon.precio_alquiler) || 0,
+            monto_alquiler: montoBase,
             fecha_limite_pago: null as any,
         });
 
-        // Enviar notificación si corresponde
-        if (enviar_notificacion && email_organizador) {
+        // Enviar notificación si corresponde y solo si es una reserva manual real.
+        if (!esBloqueo && enviar_notificacion && email_organizador) {
             const fechaFormateada = new Date(fecha).toLocaleDateString('es-AR', {
                 weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
             });
@@ -195,7 +223,10 @@ export const crearReservaManual: RequestHandler = async (req: Request, res: Resp
             ).catch(err => logger.error('[Salon] Error al enviar notificación de servicios', { error: String(err) }));
         }
 
-        return res.status(201).json({ message: 'Fecha bloqueada correctamente', reserva });
+        return res.status(201).json({
+            message: esBloqueo ? 'Fecha bloqueada correctamente' : 'Reserva manual creada correctamente',
+            reserva
+        });
     } catch (error: any) {
         logger.error('[Salon] Error al crear reserva manual', { error: error.message });
         return res.status(500).json({ message: 'Error al crear la reserva', error: error.message });
@@ -242,17 +273,18 @@ export const getSalones: RequestHandler = async(req: Request, res: Response)=>{
 }
 
 export const getSalon: RequestHandler = async(req: Request, res: Response)=>{
-    const {id_salon} = req.params
+    const { id } = req.params
     try {
-        const salon = await Salon.findByPk(id_salon)
+        const salon = await Salon.findByPk(id)
         if (!salon) return res.status(404).json({ message: 'Salón no encontrado' })
         const response = {
             ...salon.toJSON(),
             precio_publico: await calcularPrecioPublico(Number(salon.precio_alquiler), salon.dueno_id),
         }
-        res.json({response})
+        return res.json({response})
     } catch (error) {
-        logger.error('[Salon] Error', { error: String(error) })
+        logger.error('[Salon] Error al obtener salón', { error: String(error) })
+        return res.status(500).json({ message: 'Error al obtener salón' })
     }
 }
 
@@ -265,6 +297,12 @@ export const updateSalon: RequestHandler = async(req: Request, res: Response)=>{
         if (!salon) {
             return res.status(404).json({ message: 'Salón no encontrado' })
         }
+
+        const autorizado = await canManageOwnedResource(req.persona?.id_persona, salon.dueno_id)
+        if (!autorizado) {
+            return res.status(403).json({ message: 'No tenés permiso para modificar este salón' })
+        }
+
         await salon.update({
             ...(nombre !== undefined && { nombre }),
             ...(domicilio !== undefined && { domicilio }),
@@ -282,17 +320,35 @@ export const updateSalon: RequestHandler = async(req: Request, res: Response)=>{
         })
         return res.json({ message: 'Salón actualizado con éxito', salon: salon.toJSON() })
     } catch (error: any) {
-        logger.error('[Salon] Error', { error: String(error) })
+        logger.error('[Salon] Error al actualizar salón', { error: String(error) })
         return res.status(500).json({ message: 'Error al actualizar salón', error: error.message })
     }
 }
 
 export const deleteSalon: RequestHandler = async(req: Request, res: Response)=>{
-    const {id_salon}= req.params
+    const { id } = req.params
     try {
-        const response = await Salon.destroy()
-    } catch (error) {
-        logger.error('[Salon] Error', { error: String(error) })
+        const salon = await Salon.findByPk(id)
+        if (!salon) return res.status(404).json({ message: 'Salón no encontrado' })
+
+        const autorizado = await canManageOwnedResource(req.persona?.id_persona, salon.dueno_id)
+        if (!autorizado) {
+            return res.status(403).json({ message: 'No tenés permiso para eliminar este salón' })
+        }
+
+        const reservasActivas = await Reserva.count({
+            where: { salon_id: salon.id_salon, estado: { [Op.ne]: 'cancelada' } }
+        })
+
+        if (reservasActivas > 0) {
+            return res.status(409).json({ message: 'No se puede eliminar un salón con reservas activas' })
+        }
+
+        await salon.destroy()
+        return res.json({ message: 'Salón eliminado correctamente' })
+    } catch (error: any) {
+        logger.error('[Salon] Error al eliminar salón', { error: String(error) })
+        return res.status(500).json({ message: 'Error al eliminar salón', error: error.message })
     }
 }
 

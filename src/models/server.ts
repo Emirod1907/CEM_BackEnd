@@ -5,7 +5,6 @@ import express from 'express';
 import https from 'https';
 import cors from 'cors';
 import db from '../db/connection';
-import bodyParser from 'body-parser'; // Agrega esto
 import authRoutes from '../routes/auth.routes';
 import salonesRoutes from '../routes/salon.routes';
 import eventosRoutes from '../routes/evento.routes';
@@ -90,9 +89,20 @@ export class Server {
         next();
     });
   // 2. CORS
+  const allowedOrigins = (process.env.CORS_ORIGIN || process.env.FRONTEND_URL || 'http://localhost:5173')
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+
   this.app.use(cors({
-    origin: 'http://localhost:5173',
-    methods: ['GET', 'POST', 'PUT', 'DELETE'],
+    origin: (origin, callback) => {
+      if (!origin || allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      }
+
+      return callback(new Error(`Origen no permitido por CORS: ${origin}`));
+    },
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
     credentials: true,
   }));
@@ -135,7 +145,13 @@ export class Server {
               process.exit(1)
           }
 
-          await seed();
+          const autoSeedOnStart = process.env.AUTO_SEED_ON_START !== 'false';
+          if (autoSeedOnStart) {
+              await seed();
+          } else {
+              logger.info('[Seed] Seed automático desactivado por AUTO_SEED_ON_START=false');
+          }
+
           iniciarJobLiberacionVencidas();
           iniciarJobVerificarPagos();
           this.app.listen(this.port, () => {

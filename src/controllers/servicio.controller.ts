@@ -22,6 +22,35 @@ async function calcularPrecioPublicoProveedor(precioBase: number, proveedor_id?:
     }
 }
 
+async function reservaIncluyeServicioDeProveedor(reserva: Reserva, proveedor_id?: number | null): Promise<boolean> {
+    if (!proveedor_id) return false;
+
+    const serviciosProveedor = await ServicioAdicional.findAll({
+        where: { proveedor_id },
+        attributes: ['id_servicio']
+    });
+    const idsProveedor = new Set(serviciosProveedor.map(s => Number(s.id_servicio)));
+    if (idsProveedor.size === 0) return false;
+
+    const ordenes = await Orden.findAll({
+        where: { reserva_id: reserva.id_reserva, tipo: 'organizador' },
+        attributes: ['items']
+    });
+
+    for (const orden of ordenes) {
+        let items: any[] = [];
+        try { items = JSON.parse(orden.items) } catch {}
+        if (items.some((item: any) => item.id_servicio && idsProveedor.has(Number(item.id_servicio)))) {
+            return true;
+        }
+    }
+
+    let datos: any = {};
+    try { datos = reserva.datos_evento ? JSON.parse(reserva.datos_evento) : {} } catch {}
+    const serviciosDatos: any[] = Array.isArray(datos.servicios) ? datos.servicios : [];
+    return serviciosDatos.some((item: any) => item.id_servicio && idsProveedor.has(Number(item.id_servicio)));
+}
+
 // GET /api/servicios — todos los servicios disponibles (usados en el modal del organizador)
 // Devuelve precio (precio público con markup) pero NUNCA precio_base
 export const getServicios: RequestHandler = async (req: Request, res: Response) => {
@@ -471,6 +500,11 @@ export const confirmarReservaProveedor: RequestHandler = async (req: Request, re
     try {
         const reserva = await Reserva.findByPk(reserva_id);
         if (!reserva) return res.status(404).json({ message: 'Reserva no encontrada' });
+
+        const participaEnReserva = await reservaIncluyeServicioDeProveedor(reserva, proveedor_id);
+        if (!participaEnReserva) {
+            return res.status(403).json({ message: 'No tenés permiso para gestionar esta reserva' });
+        }
 
         const [entrada] = await AgendaProveedor.findOrCreate({
             where: { proveedor_id, reserva_id },

@@ -1,6 +1,7 @@
 import { NextFunction, Request, Response } from 'express'
 import Contrato from '../models/contrato'
 import { VERSION_TERMINOS } from '../config/terminos'
+import { isAdminUser } from '../services/authz.service'
 
 // Bloquea rutas de publicación si el usuario no tiene un contrato vigente del ámbito
 // requerido ('salon' o 'proveedor'). Debe ir DESPUÉS de authRequired.
@@ -10,6 +11,10 @@ const contratoVigenteRequired = (ambito: 'salon' | 'proveedor') =>
         const persona_id = req.persona?.id_persona
         if (!persona_id) {
             return res.status(401).json({ message: 'No autorizado.' })
+        }
+
+        if (await isAdminUser(persona_id)) {
+            return next()
         }
 
         const contrato = await Contrato.findOne({

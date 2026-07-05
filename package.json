@@ -5,8 +5,11 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "build": "tsc",
-    "start": "nodemon dist/app.js",
-    "dev": "nodemon --watch src --ext ts --exec \"tsc && node dist/app.js\""
+    "start": "node dist/app.js",
+    "dev": "nodemon --watch src --ext ts --exec \"tsc && node dist/app.js\"",
+    "db:migrate": "ts-node src/db/migrate.ts",
+    "db:seed": "ts-node src/db/run-seed.ts",
+    "db:setup": "npm run db:migrate && npm run db:seed"
   },
   "keywords": [],
   "author": "",
@@ -43,7 +46,6 @@
     "zod": "^4.0.14"
   },
   "devDependencies": {
-    "-": "^0.0.1",
     "@types/bcrypt": "^6.0.0",
     "@types/bcryptjs": "^2.4.6",
     "@types/body-parser": "^1.19.6",

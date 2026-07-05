@@ -8,7 +8,15 @@ import authRequired from '../middlewares/validateToken';
 
 const router = Router()
 
-router.post('/debug', (req, res) => {
+const developmentOnly: RequestHandler = (_req, res, next) => {
+  if (process.env.NODE_ENV !== 'development') {
+    return res.status(404).end();
+  }
+
+  return next();
+};
+
+router.post('/debug', developmentOnly, (req, res) => {
   res.json({
     headers: req.headers,
     parsedBody: req.body,

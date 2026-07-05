@@ -11,6 +11,7 @@ import Persona from '../models/persona'
 import { sendEntradaEmail } from '../services/email.service'
 import { logger } from '../libs/logger'
 import { getMpCredentials, getMpNotificationUrl, getMpBackUrls } from '../config/mercadopago'
+import { canManageOwnedResource } from '../services/authz.service'
 
 const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173'
 
@@ -625,6 +626,7 @@ export const confirmarAsistencia: RequestHandler = async (req: Request, res: Res
 // POST /api/invitaciones/validar
 export const validarQR: RequestHandler = async (req: Request, res: Response) => {
     const { token } = req.body
+    const persona = (req as any).persona
 
     if (!token) {
         return res.status(400).json({ message: 'Token requerido' })
@@ -655,9 +657,16 @@ export const validarQR: RequestHandler = async (req: Request, res: Response) => 
             })
         }
 
-        await invitacion.update({ estado: 'usada' })
-
         const evento = (invitacion as any).Evento
+        const autorizado = await canManageOwnedResource(persona?.id_persona, evento?.creado_por)
+        if (!autorizado) {
+            return res.status(403).json({
+                valido: false,
+                message: 'No tenés permiso para validar entradas de este evento.'
+            })
+        }
+
+        await invitacion.update({ estado: 'usada' })
 
         return res.json({
             valido: true,

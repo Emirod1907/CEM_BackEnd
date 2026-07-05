@@ -15,7 +15,7 @@ import Factura from '../models/factura';
 import AutorizacionExcepcional from '../models/autorizacionExcepcional';
 import Contrato from '../models/contrato';
 import MovimientoPozo from '../models/movimientoPozo';
-import db from './connection';
+import { seedSalones } from './salones.seed';
 import { logger } from '../libs/logger';
 
 const ENTIDADES = ['cliente', 'organizador', 'salon'];
@@ -45,7 +45,8 @@ const SERVICIOS_INICIALES = [
 
 export const seed = async () => {
     try {
-        // Crear tablas nuevas si no existen (sin tocar las existentes)
+        // Crear tablas nuevas si no existen.
+        // Los cambios estructurales de tablas viven en src/db/migrate.ts + schema-patches.ts.
         await Rol.sync({ force: false });
         await Permiso.sync({ force: false });
         await RolPermiso.sync({ force: false });
@@ -58,135 +59,12 @@ export const seed = async () => {
         await ConfiguracionComision.sync({ force: false });
         await HistorialComisiones.sync({ force: false });
         await OrdenDesglose.sync({ force: false });
-        // Factura.sync puede fallar si la tabla existe con estructura desactualizada (índice sobre
-        // orden_id pero la columna todavía no existe). El addCol de abajo la agrega; el índice
-        // se creará en el siguiente reinicio cuando la columna ya esté presente.
         try { await Factura.sync({ force: false }) } catch (_) {}
         try { await AutorizacionExcepcional.sync({ force: false }) } catch (_) {}
         try { await Contrato.sync({ force: false }) } catch (_) {}
         await MovimientoPozo.sync({ force: false });
 
-        // Helper: ejecuta ALTER TABLE ignorando "Duplicate column" (columna ya existe)
-        const addCol = async (sql: string, label: string) => {
-            try { await db.query(sql) }
-            catch (e: any) {
-                const msg: string = e?.parent?.sqlMessage || e?.message || ''
-                if (!msg.includes('Duplicate column') && !msg.includes('already exists')) {
-                    logger.warn(`[Seed] ${label}`, { msg })
-                }
-            }
-        }
-
-        // Invitaciones — nuevas columnas WhatsApp
-        await addCol(`ALTER TABLE invitaciones ADD COLUMN telefono VARCHAR(30) NULL`, 'invitaciones.telefono')
-        await addCol(`ALTER TABLE invitaciones ADD COLUMN num_invitados INT NOT NULL DEFAULT 1`, 'invitaciones.num_invitados')
-        await addCol(`ALTER TABLE invitaciones ADD COLUMN accedida_en DATETIME NULL`, 'invitaciones.accedida_en')
-        await addCol(`ALTER TABLE invitaciones ADD COLUMN persona_id INT NULL`, 'invitaciones.persona_id')
-
-        // Personas
-        await addCol(`ALTER TABLE Personas ADD COLUMN rol_id INT NULL`, 'Personas.rol_id')
-        await addCol(`ALTER TABLE Personas ADD CONSTRAINT fk_personas_rol FOREIGN KEY (rol_id) REFERENCES Roles(id_rol)`, 'Personas.fk_rol').catch(() => {})
-
-        // Ordenes
-        await addCol(`ALTER TABLE Ordenes ADD COLUMN tipo ENUM('cliente','organizador') NOT NULL DEFAULT 'cliente'`, 'Ordenes.tipo')
-        await addCol(`ALTER TABLE Ordenes ADD COLUMN reserva_id INT NULL`, 'Ordenes.reserva_id')
-        await addCol(`ALTER TABLE Ordenes ADD COLUMN tipo_pago ENUM('seña','total') NULL`, 'Ordenes.tipo_pago')
-
-        // ── Rename bodega_id → salon_id (migración 20260602_rename_bodega_to_salon) ──
-        // Cada statement usa .catch(() => {}) — si la columna ya fue renombrada falla
-        // silenciosamente (bodega_id no existe), si no fue renombrada la renombra ahora.
-        // Orden: 1) drop FKs  2) rename PK en Salones  3) rename FKs  4) recrear FKs
-        await db.query(`ALTER TABLE reservas DROP FOREIGN KEY fk_reservas_salon`).catch(() => {})
-        await db.query(`ALTER TABLE Eventos  DROP FOREIGN KEY fk_eventos_salon`).catch(() => {})
-        await db.query(`ALTER TABLE Salones  CHANGE COLUMN id_bodega  id_salon  INT NOT NULL AUTO_INCREMENT`).catch(() => {})
-        await db.query(`ALTER TABLE reservas CHANGE COLUMN bodega_id  salon_id  INT NOT NULL`).catch(() => {})
-        await db.query(`ALTER TABLE Eventos  CHANGE COLUMN bodega_id  salon_id  INT NOT NULL`).catch(() => {})
-        await db.query(`ALTER TABLE reservas ADD CONSTRAINT fk_reservas_salon FOREIGN KEY (salon_id) REFERENCES Salones (id_salon) ON UPDATE CASCADE ON DELETE RESTRICT`).catch(() => {})
-        await db.query(`ALTER TABLE Eventos  ADD CONSTRAINT fk_eventos_salon  FOREIGN KEY (salon_id) REFERENCES Salones (id_salon) ON UPDATE CASCADE ON DELETE RESTRICT`).catch(() => {})
-
-        // Reservas
-        // Contratos — comisión de dos lados
-        await addCol(`ALTER TABLE Contratos ADD COLUMN comision_proveedor_porcentaje DECIMAL(5,2) NOT NULL DEFAULT 3`, 'Contratos.comision_proveedor_porcentaje')
-        await addCol(`ALTER TABLE Contratos ADD COLUMN ambito ENUM('salon','proveedor') NOT NULL DEFAULT 'salon'`, 'Contratos.ambito')
-        await db.query(`ALTER TABLE Contratos CHANGE COLUMN comision_porcentaje comision_cliente_porcentaje DECIMAL(5,2) NOT NULL`).catch(() => {})
-
-        await addCol(`ALTER TABLE reservas ADD COLUMN estado ENUM('pendiente_pago','seña_abonada','confirmada','cancelada') NOT NULL DEFAULT 'confirmada'`, 'reservas.estado')
-        await addCol(`ALTER TABLE reservas ADD COLUMN datos_evento LONGTEXT NULL`, 'reservas.datos_evento')
-        await addCol(`ALTER TABLE reservas ADD COLUMN monto_alquiler DECIMAL(10,2) NOT NULL DEFAULT 0`, 'reservas.monto_alquiler')
-        await addCol(`ALTER TABLE reservas ADD COLUMN fecha_limite_pago DATETIME NULL`, 'reservas.fecha_limite_pago')
-        await db.query(`ALTER TABLE reservas MODIFY COLUMN evento_id INT NULL`).catch(() => {})
-
-        // Facturas — tabla puede existir sin orden_id si fue creada con versión anterior del modelo
-        await addCol(`ALTER TABLE Facturas ADD COLUMN orden_id INT NOT NULL DEFAULT 0`, 'Facturas.orden_id')
-        await db.query(`ALTER TABLE Facturas ADD CONSTRAINT fk_facturas_orden FOREIGN KEY (orden_id) REFERENCES Ordenes(id_orden)`).catch(() => {})
-
-        // Eventos
-        await db.query(`ALTER TABLE Eventos MODIFY COLUMN descripcion TEXT NOT NULL`).catch(() => {})
-        await addCol(`ALTER TABLE Eventos ADD COLUMN estado ENUM('borrador','activo','cancelado') NOT NULL DEFAULT 'activo'`, 'Eventos.estado')
-        await addCol(`ALTER TABLE Eventos ADD COLUMN es_publico TINYINT(1) NOT NULL DEFAULT 1`, 'Eventos.es_publico')
-        // Retroactivo: marcar como privados los eventos de reservas donde es_publico era false
-        await db.query(`
-            UPDATE Eventos e
-            INNER JOIN reservas r ON r.evento_id = e.id_evento
-            SET e.es_publico = 0
-            WHERE r.datos_evento LIKE '%"es_publico":false%'
-              AND e.es_publico = 1
-        `).catch(() => {})
-
-        // Salones
-        await addCol(`ALTER TABLE Salones ADD COLUMN precio_alquiler DECIMAL(10,2) NULL`, 'Salones.precio_alquiler')
-        await addCol(`ALTER TABLE Salones ADD COLUMN servicios_incluidos TEXT NULL`, 'Salones.servicios_incluidos')
-        await addCol(`ALTER TABLE Salones ADD COLUMN tipos_evento TEXT NULL`, 'Salones.tipos_evento')
-        await addCol(`ALTER TABLE Salones ADD COLUMN dueno_id INT NULL`, 'Salones.dueno_id')
-        await addCol(`ALTER TABLE Salones ADD COLUMN precios_config TEXT NULL`, 'Salones.precios_config')
-        await addCol(`ALTER TABLE Salones ADD COLUMN tipo_salon VARCHAR(30) NULL`, 'Salones.tipo_salon')
-
-        // ServiciosAdicionales — columnas añadidas post-creación inicial
-        // Actualizar el ENUM de categoria por si fue creado con valores incompletos
-        await db.query(`ALTER TABLE ServiciosAdicionales MODIFY COLUMN categoria ENUM('catering','decoracion','audio_video','seguridad','mobiliario','otro') NOT NULL DEFAULT 'otro'`).catch(() => {})
-        await addCol(`ALTER TABLE ServiciosAdicionales ADD COLUMN tipo_precio ENUM('fijo','por_persona','por_hora','por_turno') NOT NULL DEFAULT 'fijo'`, 'ServiciosAdicionales.tipo_precio')
-        await addCol(`ALTER TABLE ServiciosAdicionales ADD COLUMN imagen VARCHAR(255) NULL`, 'ServiciosAdicionales.imagen')
-        await addCol(`ALTER TABLE ServiciosAdicionales ADD COLUMN disponible TINYINT(1) NOT NULL DEFAULT 1`, 'ServiciosAdicionales.disponible')
-        await addCol(`ALTER TABLE ServiciosAdicionales ADD COLUMN proveedor_id INT NULL`, 'ServiciosAdicionales.proveedor_id')
-
-        // AgendaProveedor
-        await addCol(`ALTER TABLE agenda_proveedor ADD COLUMN motivo_cancelacion TEXT NULL`, 'agenda_proveedor.motivo_cancelacion')
-        await addCol(`ALTER TABLE agenda_proveedor ADD COLUMN detalle_pedido TEXT NULL`, 'agenda_proveedor.detalle_pedido')
-        await addCol(`ALTER TABLE agenda_proveedor ADD COLUMN monto_total DECIMAL(10,2) NULL`, 'agenda_proveedor.monto_total')
-        await addCol(`ALTER TABLE agenda_proveedor ADD COLUMN estado_pago ENUM('sin_pago','seña_abonada','pagado_total','cancelado') NOT NULL DEFAULT 'sin_pago'`, 'agenda_proveedor.estado_pago')
-        await addCol(`ALTER TABLE agenda_proveedor ADD COLUMN fecha_limite DATE NULL`, 'agenda_proveedor.fecha_limite')
-        await addCol(`ALTER TABLE agenda_proveedor ADD COLUMN domicilio TEXT NULL`, 'agenda_proveedor.domicilio')
-
-        // ServiciosAdicionales — capacidad y anticipación
-        await addCol(`ALTER TABLE ServiciosAdicionales ADD COLUMN capacidad_maxima INT NULL`, 'ServiciosAdicionales.capacidad_maxima')
-        await addCol(`ALTER TABLE ServiciosAdicionales ADD COLUMN dias_anticipacion INT NOT NULL DEFAULT 0`, 'ServiciosAdicionales.dias_anticipacion')
-        await addCol(`ALTER TABLE ServiciosAdicionales ADD CONSTRAINT fk_servicios_proveedor FOREIGN KEY (proveedor_id) REFERENCES Personas(id_persona)`, 'ServiciosAdicionales.fk_proveedor').catch(() => {})
-
-        // ServiciosAdicionales — tipo_item, disponibilidad y precios diferenciados
-        await addCol(`ALTER TABLE ServiciosAdicionales ADD COLUMN tipo_item ENUM('producto','servicio') NOT NULL DEFAULT 'producto'`, 'ServiciosAdicionales.tipo_item')
-        await addCol(`ALTER TABLE ServiciosAdicionales ADD COLUMN precio_base DECIMAL(10,2) NULL`, 'ServiciosAdicionales.precio_base')
-        await addCol(`ALTER TABLE ServiciosAdicionales ADD COLUMN dias_disponibles TEXT NULL`, 'ServiciosAdicionales.dias_disponibles')
-        await addCol(`ALTER TABLE ServiciosAdicionales ADD COLUMN horario_inicio VARCHAR(5) NULL`, 'ServiciosAdicionales.horario_inicio')
-        await addCol(`ALTER TABLE ServiciosAdicionales ADD COLUMN horario_fin VARCHAR(5) NULL`, 'ServiciosAdicionales.horario_fin')
-        await addCol(`ALTER TABLE ServiciosAdicionales ADD COLUMN precios_tramos TEXT NULL`, 'ServiciosAdicionales.precios_tramos')
-        await addCol(`ALTER TABLE ServiciosAdicionales ADD COLUMN descuento_cantidad_min INT NULL`, 'ServiciosAdicionales.descuento_cantidad_min')
-        await addCol(`ALTER TABLE ServiciosAdicionales ADD COLUMN descuento_porcentaje DECIMAL(5,2) NULL`, 'ServiciosAdicionales.descuento_porcentaje')
-        await addCol(`ALTER TABLE ServiciosAdicionales MODIFY COLUMN categoria ENUM('catering','decoracion','audio_video','seguridad','mobiliario','entretenimiento','bebidas','comida','otro') NOT NULL DEFAULT 'otro'`, 'ServiciosAdicionales.categoria_productos').catch(() => {})
-        // Nuevas categorías: personal (mozos/bartenders) y confección de tortas como servicios;
-        // cotillon/souvenirs y vajilla como productos; comida se renombra a alimentos (dulce/salado)
-        await db.query(`ALTER TABLE ServiciosAdicionales MODIFY COLUMN categoria ENUM('catering','decoracion','audio_video','seguridad','mobiliario','entretenimiento','personal','tortas','bebidas','comida','alimentos','cotillon','vajilla','otro') NOT NULL DEFAULT 'otro'`).catch(() => {})
-        await addCol(`ALTER TABLE ServiciosAdicionales ADD COLUMN subcategoria VARCHAR(30) NULL`, 'ServiciosAdicionales.subcategoria')
-        // Migrar la categoría 'comida' (legacy) a 'alimentos'
-        await db.query(`UPDATE ServiciosAdicionales SET categoria='alimentos' WHERE categoria='comida'`).catch(() => {})
-        // Alinear tipo_item con la categoría (el formulario ya las vincula):
-        // decoración, audio/video, seguridad, personal, mobiliario y entretenimiento son SERVICIOS
-        await db.query(`UPDATE ServiciosAdicionales SET tipo_item='servicio' WHERE categoria IN ('decoracion','audio_video','seguridad','personal','mobiliario','entretenimiento','tortas')`).catch(() => {})
-        // bebidas, alimentos, catering, cotillón/souvenirs y vajilla son PRODUCTOS
-        await db.query(`UPDATE ServiciosAdicionales SET tipo_item='producto' WHERE categoria IN ('bebidas','comida','alimentos','catering','cotillon','vajilla')`).catch(() => {})
-
-        // Personas — nuevos campos de perfil por rol
-        await addCol(`ALTER TABLE Personas ADD COLUMN perfil_completado TINYINT(1) NOT NULL DEFAULT 0`, 'Personas.perfil_completado')
-        await addCol(`ALTER TABLE Personas ADD COLUMN categoria_servicio TEXT NULL`, 'Personas.categoria_servicio')
+        // Seed de datos iniciales. No modificar estructura de base acá.
 
         // Crear roles por defecto
         for (const rolData of ROLES) {
@@ -240,6 +118,10 @@ export const seed = async () => {
                 defaults: { ...comisionData, activo: true },
             })
         }
+
+        // Salones de demostración (50 salones ficticios de Mendoza).
+        // findOrCreate por nombre: ejecutar el seed varias veces no duplica.
+        await seedSalones();
 
         logger.info('[Seed] Roles, permisos y servicios inicializados correctamente');
     } catch (error) {

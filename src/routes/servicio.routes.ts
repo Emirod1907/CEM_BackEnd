@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import authRequired from '../middlewares/validateToken';
+import adminRequired from '../middlewares/adminRequired';
 import contratoVigenteRequired from '../middlewares/contratoVigenteRequired';
 import uploadExcel from '../middlewares/uploadExcel';
 import {
@@ -51,8 +52,8 @@ router.get('/disponibilidad', authRequired, getDisponibilidad);
 
 // Rutas generales / admin
 router.get('/', authRequired, getServicios);
-router.post('/', authRequired, crearServicio);
-router.put('/:id', authRequired, updateServicio);
-router.delete('/:id', authRequired, deleteServicio);
+router.post('/', authRequired, adminRequired, crearServicio);
+router.put('/:id', authRequired, adminRequired, updateServicio);
+router.delete('/:id', authRequired, adminRequired, deleteServicio);
 
 export default router;
