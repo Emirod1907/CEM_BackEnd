@@ -88,6 +88,108 @@ export const getMiSalon: RequestHandler = async (req: Request, res: Response) =>
     }
 };
 
+// ── Exportación a Google Calendar (iCalendar / .ics) ──────────────────────────
+// Fase 1: genera un archivo .ics con todas las reservas activas del salón como
+// eventos "ocupados", para importarlo a Google Calendar y bloquear esas fechas.
+const escIcs = (s: any): string =>
+    String(s ?? '')
+        .replace(/\\/g, '\\\\')
+        .replace(/;/g, '\\;')
+        .replace(/,/g, '\\,')
+        .replace(/\r?\n/g, '\\n');
+
+const soloFecha = (f: any): string => String(f).slice(0, 10);           // YYYY-MM-DD
+const compactaFecha = (f: any): string => soloFecha(f).replace(/-/g, ''); // YYYYMMDD
+const compactaHora = (hhmm: string): string => `${String(hhmm).replace(':', '')}00`; // HHMMSS
+const sumarUnDia = (f: any): string => {
+    const d = new Date(soloFecha(f) + 'T12:00:00');
+    d.setDate(d.getDate() + 1);
+    return compactaFecha(d.toISOString());
+};
+const stampUTC = (): string => new Date().toISOString().replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z');
+
+function generarICS(salon: any, reservas: any[]): string {
+    const nombreCal = `Reservas — ${salon?.nombre || 'Mi salón'}`;
+    const lineas: string[] = [
+        'BEGIN:VCALENDAR',
+        'VERSION:2.0',
+        'PRODID:-//Dream Events//Reservas Salon//ES',
+        'CALSCALE:GREGORIAN',
+        'METHOD:PUBLISH',
+        `X-WR-CALNAME:${escIcs(nombreCal)}`,
+        'X-WR-TIMEZONE:America/Argentina/Buenos_Aires',
+    ];
+
+    for (const r of reservas) {
+        const de: any = r.datos_evento || {};
+        const nombreEvento = de.nombre || 'Reserva de salón';
+        const organizador = [r.Persona?.nombre, r.Persona?.apellido].filter(Boolean).join(' ').trim();
+        const pendiente = r.estado === 'pendiente_pago';
+        const hi = de.hora_inicio, hf = de.hora_fin;
+
+        lineas.push('BEGIN:VEVENT');
+        lineas.push(`UID:reserva-${r.id_reserva}@dreamevents`);
+        lineas.push(`DTSTAMP:${stampUTC()}`);
+
+        if (hi && hf) {
+            // Con horario: evento con hora (tiempo local flotante — Google lo interpreta en la TZ del calendario)
+            lineas.push(`DTSTART:${compactaFecha(r.fecha)}T${compactaHora(hi)}`);
+            const cruzaMedianoche = hf <= hi;
+            const fechaFin = cruzaMedianoche ? sumarUnDia(r.fecha) : compactaFecha(r.fecha);
+            lineas.push(`DTEND:${fechaFin}T${compactaHora(hf)}`);
+        } else {
+            // Sin horario: bloquea el día completo
+            lineas.push(`DTSTART;VALUE=DATE:${compactaFecha(r.fecha)}`);
+            lineas.push(`DTEND;VALUE=DATE:${sumarUnDia(r.fecha)}`);
+        }
+
+        lineas.push(`SUMMARY:${escIcs((pendiente ? '🕒 Reservado (pend. pago) — ' : '✅ Reservado — ') + nombreEvento)}`);
+        const desc = [
+            organizador ? `Organizador: ${organizador}` : null,
+            r.Persona?.email ? `Contacto: ${r.Persona.email}` : null,
+            `Estado: ${r.estado}`,
+            de.cupo ? `Cupo: ${de.cupo} personas` : null,
+        ].filter(Boolean).join('\\n');
+        if (desc) lineas.push(`DESCRIPTION:${escIcs(desc).replace(/\\\\n/g, '\\n')}`);
+        if (salon?.domicilio) lineas.push(`LOCATION:${escIcs([salon.nombre, salon.domicilio, salon.localidad].filter(Boolean).join(', '))}`);
+        lineas.push(`STATUS:${pendiente ? 'TENTATIVE' : 'CONFIRMED'}`);
+        lineas.push('TRANSP:OPAQUE'); // marca la fecha como OCUPADA (bloquea)
+        lineas.push('END:VEVENT');
+    }
+
+    lineas.push('END:VCALENDAR');
+    // CRLF es lo que exige el estándar iCalendar
+    return lineas.join('\r\n') + '\r\n';
+}
+
+// GET /api/salones/mi-salon/reservas.ics — descarga las reservas del salón como calendario
+export const exportarReservasICS: RequestHandler = async (req: Request, res: Response) => {
+    try {
+        const salon = await Salon.findOne({ where: { dueno_id: req.persona!.id_persona } });
+        if (!salon) return res.status(404).json({ message: 'No tenés un salón registrado' });
+
+        const reservas = await Reserva.findAll({
+            where: { salon_id: salon.id_salon, estado: { [Op.ne]: 'cancelada' } },
+            include: [{ model: Persona, as: 'Persona', attributes: ['nombre', 'apellido', 'email'] }],
+            order: [['fecha', 'ASC']]
+        });
+
+        const parsed = reservas.map(r => {
+            const json = r.toJSON() as any;
+            json.datos_evento = r.datos_evento ? (() => { try { return JSON.parse(r.datos_evento!) } catch { return {} } })() : {};
+            return json;
+        });
+
+        const ics = generarICS(salon.toJSON(), parsed);
+        res.setHeader('Content-Type', 'text/calendar; charset=utf-8');
+        res.setHeader('Content-Disposition', `attachment; filename="reservas-${(salon as any).nombre || 'salon'}.ics"`);
+        return res.send(ics);
+    } catch (error: any) {
+        logger.error('[Salon] Error al exportar reservas .ics', { error: error.message });
+        return res.status(500).json({ message: 'Error al exportar el calendario', error: error.message });
+    }
+};
+
 // GET /api/salones/mi-salon/reservas
 export const getMiSalonReservas: RequestHandler = async (req: Request, res: Response) => {
     try {
