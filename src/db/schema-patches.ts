@@ -252,6 +252,8 @@ export const applyPostMigrationSchemaPatches = async (connection: Connection): P
   await addColumnIfMissing(connection, 'Personas', 'rol_id', 'rol_id INT NULL');
   await addColumnIfMissing(connection, 'Personas', 'perfil_completado', 'perfil_completado TINYINT(1) NOT NULL DEFAULT 0');
   await addColumnIfMissing(connection, 'Personas', 'categoria_servicio', 'categoria_servicio TEXT NULL');
+  await addColumnIfMissing(connection, 'Personas', 'google_calendar_token', 'google_calendar_token TEXT NULL');
+  await addColumnIfMissing(connection, 'Personas', 'google_calendar_id', 'google_calendar_id VARCHAR(255) NULL');
   await addForeignKeyIfMissing(connection, 'Personas', 'rol_id', 'fk_personas_rol', 'Roles', 'id_rol', 'CASCADE', 'SET NULL');
 
   await addColumnIfMissing(connection, 'Ordenes', 'tipo', "tipo ENUM('cliente','organizador') NOT NULL DEFAULT 'cliente'");

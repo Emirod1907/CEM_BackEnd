@@ -2,6 +2,7 @@ import { Request, Response, RequestHandler } from 'express';
 import Reserva from '../models/reserva';
 import Salon from '../models/salon';
 import Evento from '../models/evento';
+import { upsertEventoReserva, borrarEventoReserva } from '../services/googleCalendarSync';
 import Orden from '../models/orden';
 import Contrato from '../models/contrato';
 import { Op, Transaction } from 'sequelize';
@@ -501,6 +502,9 @@ export const cambiarFechaReserva: RequestHandler = async (req: Request, res: Res
 
         await t.commit();
 
+        // Vía A: si la reserva ya está en el calendar del dueño, mover el evento a la nueva fecha
+        upsertEventoReserva(reserva).catch(() => {});
+
         let comision_cliente_porcentaje = 0;
         try {
             if ((salon as any)?.dueno_id) {
@@ -568,6 +572,8 @@ export const cancelarReserva: RequestHandler = async (req: Request, res: Respons
         // Cancelar la reserva y todas sus órdenes para liberar cupos de servicios
         await reserva.update({ estado: 'cancelada' });
         await Orden.update({ estado: 'cancelado' }, { where: { reserva_id: id } });
+        // Vía A: quitar el evento del Google Calendar del dueño (best-effort)
+        borrarEventoReserva(reserva).catch(() => {});
         return res.json({ message: 'Reserva cancelada exitosamente' });
     } catch (error: any) {
         return res.status(500).json({ message: 'Error al cancelar reserva', error: error.message });
