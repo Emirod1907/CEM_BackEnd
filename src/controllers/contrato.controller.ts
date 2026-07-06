@@ -79,11 +79,29 @@ export const aceptarContrato: RequestHandler = async (req, res) => {
     }
 
     try {
-        // Si ya existe un contrato vigente de este ámbito para esta versión, no duplicar
+        // Resolver ambas comisiones vigentes para el perfil de este proveedor/dueño
+        // ANTES del chequeo de duplicado, para poder comparar contra el snapshot previo.
+        const tipoPerfil = await resolverTipoPerfil(persona_id!)
+        const configComision = await ConfiguracionComision.findOne({
+            where: { tipo_perfil: tipoPerfil, activo: true },
+        })
+        // Snapshot inmutable de AMBOS porcentajes al momento de aceptación
+        const comisionClienteSnapshot   = configComision
+            ? Number(configComision.comision_cliente_porcentaje)
+            : COMISION_DEFAULT
+        const comisionProveedorSnapshot = configComision
+            ? Number(configComision.comision_proveedor_porcentaje)
+            : COMISION_PROVEEDOR_DEFAULT
+
+        // Si ya existe un contrato vigente de esta versión Y con las MISMAS comisiones
+        // vigentes, no duplicar. Si la comisión cambió (el admin la actualizó), se permite
+        // re-aceptar para regenerar el snapshot con los nuevos porcentajes.
         const contratoExistente = await Contrato.findOne({
             where: { persona_id, estado: 'vigente', version_terminos: VERSION_TERMINOS, ambito: ambitoContrato },
         })
-        if (contratoExistente) {
+        if (contratoExistente &&
+            Number(contratoExistente.comision_cliente_porcentaje) === comisionClienteSnapshot &&
+            Number(contratoExistente.comision_proveedor_porcentaje) === comisionProveedorSnapshot) {
             return res.status(409).json({
                 message: 'Ya tenés un contrato vigente para esta versión de los términos.',
                 contrato: contratoExistente,
@@ -112,19 +130,6 @@ export const aceptarContrato: RequestHandler = async (req, res) => {
         ) ?? req.ip ?? 'desconocida'
 
         const user_agent = (req.headers['user-agent'] as string) ?? 'desconocido'
-
-        // Resolver ambas comisiones vigentes para el perfil de este proveedor/dueño
-        const tipoPerfil = await resolverTipoPerfil(persona_id!)
-        const configComision = await ConfiguracionComision.findOne({
-            where: { tipo_perfil: tipoPerfil, activo: true },
-        })
-        // Snapshot inmutable de AMBOS porcentajes al momento de aceptación
-        const comisionClienteSnapshot   = configComision
-            ? Number(configComision.comision_cliente_porcentaje)
-            : COMISION_DEFAULT
-        const comisionProveedorSnapshot = configComision
-            ? Number(configComision.comision_proveedor_porcentaje)
-            : COMISION_PROVEEDOR_DEFAULT
 
         const hash = hashTerminos()
         const contrato = await Contrato.create({
@@ -172,15 +177,38 @@ export const getMiContrato: RequestHandler = async (req, res) => {
             order: [['fecha_aceptacion', 'DESC']],
         })
 
-        // Indicar si la versión del contrato vigente coincide con la versión actual
-        const estaActualizado = contrato
-            ? contrato.version_terminos === VERSION_TERMINOS
-            : false
+        // Comisiones vigentes actuales para el perfil de la persona
+        let comisionActualCliente:   number | null = null
+        let comisionActualProveedor: number | null = null
+        if (persona_id) {
+            try {
+                const tipoPerfil = await resolverTipoPerfil(persona_id)
+                const cfg = await ConfiguracionComision.findOne({
+                    where: { tipo_perfil: tipoPerfil, activo: true },
+                })
+                if (cfg) {
+                    comisionActualCliente   = Number(cfg.comision_cliente_porcentaje)
+                    comisionActualProveedor = Number(cfg.comision_proveedor_porcentaje)
+                }
+            } catch { /* fallback: sin drift detectable */ }
+        }
+
+        // El contrato queda desactualizado si cambió la versión de T&C O si el admin
+        // modificó la comisión respecto del snapshot congelado en el contrato vigente.
+        const versionCoincide = contrato ? contrato.version_terminos === VERSION_TERMINOS : false
+        const comisionDesactualizada = !!contrato && comisionActualCliente !== null && (
+            Number(contrato.comision_cliente_porcentaje)   !== comisionActualCliente ||
+            Number(contrato.comision_proveedor_porcentaje) !== comisionActualProveedor
+        )
+        const estaActualizado = versionCoincide && !comisionDesactualizada
 
         return res.json({
             contrato: contrato ?? null,
             version_actual: VERSION_TERMINOS,
             esta_actualizado: estaActualizado,
+            comision_desactualizada: comisionDesactualizada,
+            comision_actual_cliente:   comisionActualCliente,
+            comision_actual_proveedor: comisionActualProveedor,
             requiere_nueva_aceptacion: !contrato || !estaActualizado,
         })
     } catch (error) {
