@@ -1,4 +1,5 @@
 import nodemailer from 'nodemailer';
+import { logger } from '../libs/logger';
 
 const transporter = nodemailer.createTransport({
     host: process.env.EMAIL_HOST || 'smtp.gmail.com',
@@ -9,6 +10,42 @@ const transporter = nodemailer.createTransport({
         pass: process.env.EMAIL_PASS,
     },
 });
+
+// Remitente mostrado en los correos. Gmail obliga a autenticar con la cuenta real
+// (EMAIL_USER), pero el nombre visible indica que es una casilla de notificación que
+// no debe responderse. Configurable con EMAIL_FROM.
+const REMITENTE = () => process.env.EMAIL_FROM || `"Dream Events (no responder)" <${process.env.EMAIL_USER}>`;
+
+// Valores de ejemplo que trae el .env.example y que NO sirven para autenticarse.
+const PLACEHOLDERS_EMAIL = ['TU_EMAIL', 'TU_PASSWORD', 'TU_APP', 'CHANGEME', 'YOUR_EMAIL', 'XXXX'];
+
+// True solo si EMAIL_USER/EMAIL_PASS están presentes y no son placeholders del ejemplo.
+export const emailConfigurado = (): boolean => {
+    const user = (process.env.EMAIL_USER || '').trim();
+    const pass = (process.env.EMAIL_PASS || '').trim();
+    if (!user || !pass) return false;
+    const esPlaceholder = (v: string) => PLACEHOLDERS_EMAIL.some(p => v.toUpperCase().includes(p));
+    return !esPlaceholder(user) && !esPlaceholder(pass);
+};
+
+// Verificación al arranque: avisa claramente si el SMTP no va a poder enviar,
+// en vez de fallar en silencio recién cuando se dispara el primer correo.
+export const verificarEmail = async (): Promise<void> => {
+    if (!emailConfigurado()) {
+        logger.warn('[Email] SMTP NO configurado: EMAIL_USER/EMAIL_PASS vacíos o con valores de ejemplo. '
+            + 'Los correos (invitaciones, entradas, comisiones) NO se enviarán. '
+            + 'Cargá un Gmail real + Contraseña de aplicación en el .env.');
+        return;
+    }
+    try {
+        await transporter.verify();
+        logger.info(`[Email] SMTP OK — envíos habilitados desde ${process.env.EMAIL_USER}`);
+    } catch (err: any) {
+        logger.error('[Email] Credenciales SMTP rechazadas — los correos no se enviarán. '
+            + 'Si usás Gmail, necesitás 2-Step Verification + Contraseña de aplicación (no la contraseña normal).',
+            { error: err?.message });
+    }
+};
 
 interface EntradaEmailParams {
     toEmail: string;
@@ -122,7 +159,7 @@ export const sendEntradaEmail = async ({
 </html>`.trim()
 
     await transporter.sendMail({
-        from: `"Dream Events" <${process.env.EMAIL_USER}>`,
+        from: REMITENTE(),
         to: toEmail,
         subject: `🎟️ Tu entrada para "${eventoNombre}"`,
         html: htmlContent,
@@ -251,7 +288,7 @@ export const sendServiciosNotificacion = async (
 </html>`.trim();
 
     await transporter.sendMail({
-        from: `"Dream Events" <${process.env.EMAIL_USER}>`,
+        from: REMITENTE(),
         to: toEmail,
         subject: `🎉 ¡Tu evento en ${salonNombre} está confirmado! Descubrí nuestros servicios`,
         html: htmlContent,
@@ -374,7 +411,7 @@ export const sendRegistrationConfirmationEmail = async (
     `.trim();
 
     await transporter.sendMail({
-        from: `"Dream Events" <${process.env.EMAIL_USER}>`,
+        from: REMITENTE(),
         to: toEmail,
         subject: '¡Bienvenido/a a Dream Events! Tu registro fue exitoso',
         html: htmlContent,
@@ -422,7 +459,7 @@ export const sendComisionActualizadaEmail = async (
   </td></tr>
 </table></td></tr></table></body></html>`;
     await transporter.sendMail({
-        from: `"Dream Events" <${process.env.EMAIL_USER}>`,
+        from: REMITENTE(),
         to: toEmail,
         subject: `Cambio en las comisiones de tu contrato — ${perfilLabel}`,
         html,

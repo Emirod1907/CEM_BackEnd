@@ -24,6 +24,7 @@ import { getMpCredentials, getMpEncryptionKey } from '../config/mercadopago';
 import { iniciarJobLiberacionVencidas } from '../jobs/liberarReservasVencidas';
 import { iniciarJobVerificarPagos } from '../jobs/verificarPagosPendientes';
 import { obtenerCertificadoLocal } from '../libs/certLocal';
+import { verificarEmail } from '../services/email.service';
 import { logger } from '../libs/logger';
 import { errorHandler } from '../middlewares/errorHandler';
 import { globalLimiter } from '../middlewares/rateLimiter';
@@ -151,6 +152,9 @@ export class Server {
           } else {
               logger.info('[Seed] Seed automático desactivado por AUTO_SEED_ON_START=false');
           }
+
+          // Diagnóstico de SMTP (no bloquea el arranque): loguea si el mail funciona
+          verificarEmail();
 
           iniciarJobLiberacionVencidas();
           iniciarJobVerificarPagos();
