@@ -559,10 +559,11 @@ async function crearEventoDesdeReserva(
     const estadoEvento = tipo_pago === 'total' ? 'activo' : 'borrador';
     const estadoReserva = tipo_pago === 'total' ? 'confirmada' : 'seña_abonada';
 
-    // Evento privado: ya fue creado como borrador al hacer la reserva — solo actualizar estados
+    // Evento privado: ya fue creado como borrador al hacer la reserva — actualizar estado
+    // y re-afirmar la visibilidad desde datos_evento (el borrador podría no tenerla seteada)
     if (reserva.evento_id) {
         await Evento.update(
-            { estado: estadoEvento },
+            { estado: estadoEvento, es_publico: datos.es_publico !== false },
             { where: { id_evento: reserva.evento_id }, transaction: t }
         );
         await reserva.update({ estado: estadoReserva }, { transaction: t });

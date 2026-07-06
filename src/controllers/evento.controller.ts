@@ -1,4 +1,5 @@
 import { Request, RequestHandler, Response } from "express";
+import { Op } from "sequelize";
 import Evento from "../models/evento";
 import Reserva from "../models/reserva"
 import Salon from "../models/salon";
@@ -60,8 +61,11 @@ export const crearEvento: RequestHandler = async (req: Request, res: Response)=>
 
 export const getEventos: RequestHandler = async (_req: Request, res: Response)=>{
     try{
+        // Solo eventos activos, públicos y de hoy en adelante (los pasados quedan archivados)
+        const hoy = new Date(); hoy.setHours(0, 0, 0, 0);
         const response = await Evento.findAll({
-            where: { estado: 'activo', es_publico: true }
+            where: { estado: 'activo', es_publico: true, fecha: { [Op.gte]: hoy } },
+            order: [['fecha', 'ASC']]
         })
         return res.json({response})
     }catch(error: any){

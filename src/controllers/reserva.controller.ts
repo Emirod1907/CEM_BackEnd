@@ -206,6 +206,7 @@ export const solicitarReserva: RequestHandler = async (req: Request, res: Respon
                 imagen: datos_evento.imagen || '',
                 salon_id,
                 creado_por: persona_id,
+                es_publico: false,   // este bloque es solo para eventos privados
                 estado: 'borrador'
             }, { transaction: t });
 
