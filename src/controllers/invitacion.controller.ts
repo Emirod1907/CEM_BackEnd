@@ -22,6 +22,26 @@ const getMpClient = () => {
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
+// Verifica si sumar `nuevas` entradas superaría el cupo del evento. Devuelve el
+// objeto de error (para responder 409) si excede, o null si hay lugar / no hay cupo.
+const excedeCupo = async (evento_id: number, cupoRaw: any, nuevas: number) => {
+    const cupo = Number(cupoRaw) || 0
+    if (cupo <= 0) return null
+    const previas = await Invitacion.findAll({
+        where: { evento_id },
+        attributes: ['num_invitados']
+    })
+    const yaInvitados = previas.reduce((acc, i) => acc + (Number((i as any).num_invitados) || 0), 0)
+    const disponibles = Math.max(0, cupo - yaInvitados)
+    if (yaInvitados + nuevas > cupo) {
+        return {
+            message: `Superás el cupo del evento (${cupo}). Ya invitaste a ${yaInvitados} persona(s); quedan ${disponibles} lugar(es). Ampliá el cupo del evento para invitar a más.`,
+            cupo, ya_invitados: yaInvitados, disponibles
+        }
+    }
+    return null
+}
+
 const toInvitacionPublica = (inv: Invitacion, evento: any) => ({
     token: inv.token,
     num_invitados: inv.num_invitados,
@@ -61,6 +81,12 @@ export const crearInvitacion: RequestHandler = async (req: Request, res: Respons
 
         if (!evento) {
             return res.status(404).json({ message: 'Evento no encontrado o no sos el organizador' })
+        }
+
+        // Control de cupo: la suma de entradas de las invitaciones no puede superar el cupo
+        const cupoExcedido = await excedeCupo(Number(evento_id), (evento as any).cupo, Number(num_invitados))
+        if (cupoExcedido) {
+            return res.status(409).json(cupoExcedido)
         }
 
         const token = crypto.randomUUID().replace(/-/g, '')
@@ -148,6 +174,12 @@ export const generarNuevaInvitacion: RequestHandler = async (req: Request, res: 
 
         if (!evento) {
             return res.status(404).json({ message: 'Evento no encontrado o no sos el organizador' })
+        }
+
+        // Control de cupo (esta genera un link general que suma 1 entrada)
+        const cupoExcedido = await excedeCupo(Number(evento_id), (evento as any).cupo, 1)
+        if (cupoExcedido) {
+            return res.status(409).json(cupoExcedido)
         }
 
         const token = crypto.randomUUID().replace(/-/g, '')
