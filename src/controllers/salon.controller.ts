@@ -8,6 +8,7 @@ import { logger } from "../libs/logger";
 import { sendServiciosNotificacion } from '../services/email.service';
 import { calcularMontoAlquiler } from './reserva.controller';
 import { canManageOwnedResource } from '../services/authz.service';
+import { upsertEventoReserva } from '../services/googleCalendarSync';
 
 // Aplica la comisión del cliente (frozen en el contrato vigente del dueño) al precio base.
 // Devuelve el precio que ve y paga el cliente final.
@@ -222,6 +223,9 @@ export const crearReservaManual: RequestHandler = async (req: Request, res: Resp
                 fechaFormateada,
             ).catch(err => logger.error('[Salon] Error al enviar notificación de servicios', { error: String(err) }));
         }
+
+        // Vía A: agendar el bloqueo/reserva manual del dueño en su Google Calendar (best-effort)
+        upsertEventoReserva(reserva).catch(() => {});
 
         return res.status(201).json({
             message: esBloqueo ? 'Fecha bloqueada correctamente' : 'Reserva manual creada correctamente',

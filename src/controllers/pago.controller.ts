@@ -2,6 +2,7 @@ import { Request, Response, RequestHandler } from 'express';
 import { MercadoPagoConfig, Preference, Payment } from 'mercadopago';
 import Orden from '../models/orden';
 import Reserva from '../models/reserva';
+import { upsertEventoReserva } from '../services/googleCalendarSync';
 import Evento from '../models/evento';
 import Salon from '../models/salon';
 import Contrato from '../models/contrato';
@@ -345,6 +346,7 @@ export async function procesarPagoMP(paymentData: any): Promise<Orden | null> {
     const externalReference = (paymentData as any).external_reference as string | undefined;
 
     let ordenProcesada: Orden | null = null;
+    let reservaSyncId: number | null = null;
 
     await db.transaction(async (t) => {
         // --- Buscar la orden: preference_id primero, external_reference como fallback ---
@@ -405,6 +407,7 @@ export async function procesarPagoMP(paymentData: any): Promise<Orden | null> {
         if (orden.tipo === 'organizador' && estado === 'aprobado' && orden.reserva_id) {
             await crearEventoDesdeReserva(orden.reserva_id, orden.tipo_pago || 'seña', t);
             await crearDesgloseComision(orden, t);
+            reservaSyncId = orden.reserva_id;
         }
 
         // --- Si es pago de entradas aprobado, registrar el ingreso en el pozo ---
@@ -412,6 +415,11 @@ export async function procesarPagoMP(paymentData: any): Promise<Orden | null> {
             await registrarIngresosPozo(orden, t);
         }
     });
+
+    // Vía A: agendar la reserva en el Google Calendar del dueño (post-commit, best-effort)
+    if (reservaSyncId) {
+        Reserva.findByPk(reservaSyncId).then(r => { if (r) return upsertEventoReserva(r); }).catch(() => {});
+    }
 
     // --- Pago de invitación aprobado: emitir entrada con QR ---
     // Fuera de la transacción (incluye envío de email). Idempotente.
@@ -551,10 +559,11 @@ async function crearEventoDesdeReserva(
     const estadoEvento = tipo_pago === 'total' ? 'activo' : 'borrador';
     const estadoReserva = tipo_pago === 'total' ? 'confirmada' : 'seña_abonada';
 
-    // Evento privado: ya fue creado como borrador al hacer la reserva — solo actualizar estados
+    // Evento privado: ya fue creado como borrador al hacer la reserva — actualizar estado
+    // y re-afirmar la visibilidad desde datos_evento (el borrador podría no tenerla seteada)
     if (reserva.evento_id) {
         await Evento.update(
-            { estado: estadoEvento },
+            { estado: estadoEvento, es_publico: datos.es_publico !== false },
             { where: { id_evento: reserva.evento_id }, transaction: t }
         );
         await reserva.update({ estado: estadoReserva }, { transaction: t });
@@ -648,6 +657,7 @@ export const simularPagoAprobado: RequestHandler = async (req: Request, res: Res
     if (!orden_id) return res.status(400).json({ message: 'orden_id es requerido' })
 
     try {
+        let reservaSyncId: number | null = null
         await db.transaction(async (t) => {
             const orden = await Orden.findOne({
                 where: { id_orden: orden_id },
@@ -663,8 +673,14 @@ export const simularPagoAprobado: RequestHandler = async (req: Request, res: Res
             if (orden.tipo === 'organizador' && orden.reserva_id) {
                 await crearEventoDesdeReserva(orden.reserva_id, orden.tipo_pago || 'seña', t)
                 await crearDesgloseComision(orden, t)
+                reservaSyncId = orden.reserva_id
             }
         })
+
+        // Vía A: agendar en el Google Calendar del dueño (post-commit, best-effort)
+        if (reservaSyncId) {
+            Reserva.findByPk(reservaSyncId).then(r => { if (r) return upsertEventoReserva(r); }).catch(() => {});
+        }
 
         return res.json({ message: 'Pago simulado como aprobado correctamente', orden_id })
     } catch (error: any) {

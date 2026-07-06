@@ -2,6 +2,7 @@ import { Request, Response, RequestHandler } from 'express';
 import Reserva from '../models/reserva';
 import Salon from '../models/salon';
 import Evento from '../models/evento';
+import { upsertEventoReserva, borrarEventoReserva } from '../services/googleCalendarSync';
 import Orden from '../models/orden';
 import Contrato from '../models/contrato';
 import { Op, Transaction } from 'sequelize';
@@ -10,6 +11,8 @@ import { logger } from '../libs/logger';
 
 const PORCENTAJE_SENA = 0.30;
 const HORAS_LIMITE_PAGO = 48;
+// Se puede cambiar la fecha del evento (mismo salón) sin penalidad hasta N días antes
+const DIAS_LIMITE_CAMBIO_FECHA = 7;
 
 // POST /api/reservas/solicitar
 // ── Helpers de precio dinámico ─────────────────────────────────────────────────
@@ -203,6 +206,7 @@ export const solicitarReserva: RequestHandler = async (req: Request, res: Respon
                 imagen: datos_evento.imagen || '',
                 salon_id,
                 creado_por: persona_id,
+                es_publico: false,   // este bloque es solo para eventos privados
                 estado: 'borrador'
             }, { transaction: t });
 
@@ -435,6 +439,104 @@ export const actualizarServiciosReserva: RequestHandler = async (req: Request, r
     }
 };
 
+// PATCH /api/reservas/:id/fecha — cambia la fecha del evento en el MISMO salón,
+// hasta N días antes sin penalidad, verificando disponibilidad y recalculando el
+// precio según el tipo de día (feriado / fin de semana / hábil) del salón.
+export const cambiarFechaReserva: RequestHandler = async (req: Request, res: Response) => {
+    const { id } = req.params;
+    const persona_id = req.persona!.id_persona;
+    const nuevaFecha = String(req.body?.fecha || '').slice(0, 10);
+
+    if (!nuevaFecha) return res.status(400).json({ message: 'La nueva fecha es requerida' });
+    const hoy = new Date(); hoy.setHours(0, 0, 0, 0);
+    const nueva = new Date(nuevaFecha + 'T00:00:00');
+    if (Number.isNaN(nueva.getTime())) return res.status(400).json({ message: 'Fecha inválida' });
+    if (nueva <= hoy) return res.status(400).json({ message: 'La nueva fecha debe ser posterior a hoy' });
+
+    const t = await db.transaction();
+    try {
+        const reserva = await Reserva.findOne({
+            where: { id_reserva: id, persona_id },
+            lock: Transaction.LOCK.UPDATE, transaction: t
+        });
+        if (!reserva) { await t.rollback(); return res.status(404).json({ message: 'Reserva no encontrada' }); }
+        if (reserva.estado === 'cancelada') { await t.rollback(); return res.status(400).json({ message: 'La reserva está cancelada' }); }
+        if (reserva.estado === 'confirmada') { await t.rollback(); return res.status(400).json({ message: 'La reserva ya está confirmada; no se puede cambiar la fecha' }); }
+
+        // Fecha límite: sin penalidad solo hasta N días antes del evento actual
+        const fechaActual = new Date(fechaAStr(reserva.fecha) + 'T00:00:00');
+        const diasHastaEvento = Math.floor((fechaActual.getTime() - hoy.getTime()) / 86400000);
+        if (diasHastaEvento < DIAS_LIMITE_CAMBIO_FECHA) {
+            await t.rollback();
+            return res.status(409).json({
+                message: `El cambio de fecha sin penalidad solo está disponible hasta ${DIAS_LIMITE_CAMBIO_FECHA} días antes del evento.`,
+                penalidad: true
+            });
+        }
+
+        // Disponibilidad del salón en la nueva fecha (excluyendo esta reserva)
+        const ocupada = await Reserva.findOne({
+            where: {
+                salon_id: reserva.salon_id,
+                fecha: nuevaFecha,
+                estado: { [Op.ne]: 'cancelada' },
+                id_reserva: { [Op.ne]: reserva.id_reserva }
+            },
+            lock: Transaction.LOCK.UPDATE, transaction: t
+        });
+        if (ocupada) { await t.rollback(); return res.status(409).json({ message: 'El salón no está disponible en esa fecha' }); }
+
+        const salon = await Salon.findByPk(reserva.salon_id, { transaction: t });
+        let datos: any = {};
+        try { datos = reserva.datos_evento ? JSON.parse(reserva.datos_evento) : {}; } catch { /* ignore */ }
+        datos.fecha = nuevaFecha;
+        const horas = horasDesdeDatosEvento(datos);
+        const precioBase = Number(salon?.precio_alquiler) || 0;
+        const monto_alquiler = calcularMontoAlquiler(precioBase, (salon as any)?.precios_config, nuevaFecha, horas);
+
+        await reserva.update({ fecha: nuevaFecha, datos_evento: JSON.stringify(datos), monto_alquiler }, { transaction: t });
+
+        // Si el evento ya existe (borrador privado o activado), sincronizar su fecha
+        if (reserva.evento_id) {
+            try { await Evento.update({ fecha: nuevaFecha as any }, { where: { id_evento: reserva.evento_id }, transaction: t }); } catch { /* best-effort */ }
+        }
+
+        await t.commit();
+
+        // Vía A: si la reserva ya está en el calendar del dueño, mover el evento a la nueva fecha
+        upsertEventoReserva(reserva).catch(() => {});
+
+        let comision_cliente_porcentaje = 0;
+        try {
+            if ((salon as any)?.dueno_id) {
+                const contrato = await Contrato.findOne({
+                    where: { persona_id: (salon as any).dueno_id, estado: 'vigente', ambito: 'salon' },
+                    attributes: ['comision_cliente_porcentaje']
+                });
+                if (contrato) comision_cliente_porcentaje = Number(contrato.comision_cliente_porcentaje);
+            }
+        } catch { /* sin comisión */ }
+
+        return res.json({
+            reserva: {
+                id_reserva: reserva.id_reserva,
+                fecha: nuevaFecha,
+                monto_alquiler,
+                monto_sena: +(monto_alquiler * PORCENTAJE_SENA).toFixed(2),
+                comision_cliente_porcentaje,
+                datos_evento: datos
+            }
+        });
+    } catch (error: any) {
+        await t.rollback();
+        if (error.name === 'SequelizeUniqueConstraintError') {
+            return res.status(409).json({ message: 'La fecha ya fue reservada por otro usuario. Elegí otra.' });
+        }
+        logger.error('[Reserva] Error al cambiar fecha', { error: error.message });
+        return res.status(500).json({ message: 'Error al cambiar la fecha', error: error.message });
+    }
+};
+
 // DELETE /api/reservas/:id  — elimina permanentemente una reserva cancelada
 export const eliminarReservaCancelada: RequestHandler = async (req: Request, res: Response) => {
     const { id } = req.params;
@@ -471,6 +573,8 @@ export const cancelarReserva: RequestHandler = async (req: Request, res: Respons
         // Cancelar la reserva y todas sus órdenes para liberar cupos de servicios
         await reserva.update({ estado: 'cancelada' });
         await Orden.update({ estado: 'cancelado' }, { where: { reserva_id: id } });
+        // Vía A: quitar el evento del Google Calendar del dueño (best-effort)
+        borrarEventoReserva(reserva).catch(() => {});
         return res.json({ message: 'Reserva cancelada exitosamente' });
     } catch (error: any) {
         return res.status(500).json({ message: 'Error al cancelar reserva', error: error.message });

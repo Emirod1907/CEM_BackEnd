@@ -1,7 +1,40 @@
 import { Request, RequestHandler, Response } from 'express'
 import ConfiguracionComision, { TIPOS_PERFIL, TipoPerfil } from '../models/configuracionComision'
 import HistorialComisiones from '../models/historialComisiones'
+import Contrato from '../models/contrato'
 import Persona from '../models/persona'
+import { sendComisionActualizadaEmail } from '../services/email.service'
+import { logger } from '../libs/logger'
+
+const LABEL_PERFIL: Record<string, string> = {
+    salon: 'Salones', catering: 'Catering', decoracion: 'Decoración', audio_video: 'Audio y Video',
+    seguridad: 'Seguridad', mobiliario: 'Mobiliario', entretenimiento: 'Entretenimiento', otro: 'Otros',
+}
+
+// Notifica (best-effort) a los usuarios con contrato vigente del ámbito afectado por el cambio.
+// tipo_perfil 'salon' → dueños de salón (ámbito 'salon'); el resto → proveedores (ámbito 'proveedor').
+async function notificarCambioComision(
+    tipo_perfil: string,
+    cambios: { clienteAnt: number; clienteNue: number; provAnt: number; provNue: number },
+): Promise<number> {
+    const ambito = tipo_perfil === 'salon' ? 'salon' : 'proveedor'
+    const contratos = await Contrato.findAll({
+        where: { ambito, estado: 'vigente' },
+        include: [{ model: Persona, as: 'Persona', attributes: ['nombre', 'email'], required: true }],
+    })
+    // Evitar mails duplicados si un usuario tuviera más de un contrato
+    const vistos = new Set<string>()
+    let notificados = 0
+    for (const c of contratos) {
+        const p: any = (c as any).Persona
+        if (!p?.email || vistos.has(p.email)) continue
+        vistos.add(p.email)
+        sendComisionActualizadaEmail(p.email, p.nombre || 'Usuario', LABEL_PERFIL[tipo_perfil] || tipo_perfil, cambios)
+            .catch(err => logger.warn('[Comision] Email de notificación falló', { email: p.email, error: err?.message }))
+        notificados++
+    }
+    return notificados
+}
 
 const PORCENTAJE_MIN = 0
 const PORCENTAJE_MAX = 50
@@ -70,7 +103,8 @@ export const updateComision: RequestHandler = async (req: Request, res: Response
             fecha_actualizacion: new Date(),
         })
 
-        // Registrar historial solo si algún porcentaje cambió
+        // Registrar historial + notificar a los usuarios solo si algún porcentaje cambió
+        let notificados = 0
         if (cliente_nuevo !== cliente_anterior || proveedor_nuevo !== proveedor_anterior) {
             await HistorialComisiones.create({
                 config_id: config.id_config,
@@ -82,11 +116,21 @@ export const updateComision: RequestHandler = async (req: Request, res: Response
                 admin_id,
                 fecha: new Date(),
             })
+
+            try {
+                notificados = await notificarCambioComision(tipo_perfil, {
+                    clienteAnt: cliente_anterior, clienteNue: cliente_nuevo,
+                    provAnt: proveedor_anterior, provNue: proveedor_nuevo,
+                })
+            } catch (e: any) {
+                logger.warn('[Comision] No se pudo notificar el cambio', { error: e.message })
+            }
         }
 
         return res.json({
             message: 'Comisión actualizada correctamente.',
             comision: config,
+            notificados,
         })
     } catch (error: any) {
         return res.status(500).json({ message: 'Error al actualizar comisión.', error: error.message })

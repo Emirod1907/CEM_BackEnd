@@ -17,7 +17,9 @@ interface PersonaAtributos {
     user_password?: string,
     rol_id?: number,
     perfil_completado?: boolean,
-    categoria_servicio?: string
+    categoria_servicio?: string,
+    google_calendar_token?: string | null,
+    google_calendar_id?: string | null
 }
 
 class Persona extends Model<PersonaAtributos> implements PersonaAtributos {
@@ -33,6 +35,8 @@ class Persona extends Model<PersonaAtributos> implements PersonaAtributos {
     declare rol_id: number;
     declare perfil_completado: boolean;
     declare categoria_servicio: string;
+    declare google_calendar_token: string | null;
+    declare google_calendar_id: string | null;
 }
 
 Persona.init({
@@ -112,6 +116,15 @@ Persona.init({
     },
     categoria_servicio: {
         type: DataTypes.TEXT,
+        allowNull: true
+    },
+    // Google Calendar (dueño de salón): refresh_token cifrado + id del calendario destino
+    google_calendar_token: {
+        type: DataTypes.TEXT,
+        allowNull: true
+    },
+    google_calendar_id: {
+        type: DataTypes.STRING,
         allowNull: true
     }
 },{
