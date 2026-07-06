@@ -11,7 +11,9 @@ import {
     confirmarAsistencia,
     pagarInvitacion,
     validarQR,
-    getMisInvitaciones
+    getMisInvitaciones,
+    editarInvitacion,
+    eliminarInvitacion
 } from '../controllers/invitacion.controller'
 
 const router = Router()
@@ -39,5 +41,8 @@ router.post('/generar-por-reserva', authRequired, generarLinkPorReserva)
 router.post('/generar-por-evento',  authRequired, generarNuevaInvitacion)
 router.post('/validar',            authRequired, validarQR)
 router.get('/mis-invitaciones/:evento_id', authRequired, getMisInvitaciones)
+// Editar / eliminar una invitación (métodos propios, no colisionan con GET/POST /:token)
+router.patch('/:id',  authRequired, editarInvitacion)
+router.delete('/:id', authRequired, eliminarInvitacion)
 
 export default router

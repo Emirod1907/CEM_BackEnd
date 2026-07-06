@@ -742,3 +742,87 @@ export const getMisInvitaciones: RequestHandler = async (req: Request, res: Resp
         return res.status(500).json({ message: 'Error al obtener invitaciones', error: error.message })
     }
 }
+
+// Verifica que la persona logueada sea el organizador dueño de la invitación.
+// Devuelve { inv, evento } o null (y responde el error correspondiente).
+const cargarInvitacionPropia = async (id: any, persona: any, res: Response) => {
+    const inv = await Invitacion.findByPk(id)
+    if (!inv) { res.status(404).json({ message: 'Invitación no encontrada' }); return null }
+    const evento = await Evento.findOne({
+        where: { id_evento: inv.evento_id, creado_por: persona.id_persona }
+    })
+    if (!evento) { res.status(403).json({ message: 'No sos el organizador de este evento' }); return null }
+    return { inv, evento }
+}
+
+// PATCH /api/invitaciones/:id — editar entradas o nombre de una invitación pendiente
+export const editarInvitacion: RequestHandler = async (req: Request, res: Response) => {
+    const { id } = req.params
+    const { num_invitados, nombre_invitado } = req.body
+    const persona = (req as any).persona
+    try {
+        const ctx = await cargarInvitacionPropia(id, persona, res)
+        if (!ctx) return
+        const { inv, evento } = ctx
+
+        if (inv.estado !== 'pendiente') {
+            return res.status(409).json({ message: 'Solo se pueden editar invitaciones pendientes (esta ya fue confirmada o usada).' })
+        }
+
+        const updates: any = {}
+        if (nombre_invitado !== undefined) updates.nombre_invitado = nombre_invitado || null
+
+        if (num_invitados !== undefined) {
+            const n = Number(num_invitados)
+            if (!(n >= 1 && n <= 20)) {
+                return res.status(400).json({ message: 'num_invitados debe estar entre 1 y 20' })
+            }
+            // Control de cupo, excluyendo las entradas actuales de esta misma invitación
+            const cupo = Number((evento as any).cupo) || 0
+            if (cupo > 0) {
+                const previas = await Invitacion.findAll({
+                    where: { evento_id: inv.evento_id },
+                    attributes: ['id_invitacion', 'num_invitados']
+                })
+                const otras = previas
+                    .filter(p => (p as any).id_invitacion !== inv.id_invitacion)
+                    .reduce((acc, i) => acc + (Number((i as any).num_invitados) || 0), 0)
+                if (otras + n > cupo) {
+                    const disponibles = Math.max(0, cupo - otras)
+                    return res.status(409).json({
+                        message: `Superás el cupo del evento (${cupo}). Con las demás invitaciones ya hay ${otras} lugar(es) tomados; el máximo para esta es ${disponibles}.`,
+                        cupo, disponibles
+                    })
+                }
+            }
+            updates.num_invitados = n
+        }
+
+        await inv.update(updates)
+        return res.json({ message: 'Invitación actualizada', invitacion: inv.toJSON() })
+    } catch (error: any) {
+        logger.error('[Invitacion] Error editando invitación', { error: error.message })
+        return res.status(500).json({ message: 'Error al editar la invitación', error: error.message })
+    }
+}
+
+// DELETE /api/invitaciones/:id — eliminar una invitación (no usada)
+export const eliminarInvitacion: RequestHandler = async (req: Request, res: Response) => {
+    const { id } = req.params
+    const persona = (req as any).persona
+    try {
+        const ctx = await cargarInvitacionPropia(id, persona, res)
+        if (!ctx) return
+        const { inv } = ctx
+
+        if (inv.estado === 'usada') {
+            return res.status(409).json({ message: 'No se puede eliminar una invitación ya usada (el invitado ya ingresó al evento).' })
+        }
+
+        await inv.destroy()
+        return res.json({ message: 'Invitación eliminada', id_invitacion: Number(id) })
+    } catch (error: any) {
+        logger.error('[Invitacion] Error eliminando invitación', { error: error.message })
+        return res.status(500).json({ message: 'Error al eliminar la invitación', error: error.message })
+    }
+}
