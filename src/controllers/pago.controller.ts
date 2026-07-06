@@ -556,7 +556,13 @@ async function crearEventoDesdeReserva(
     if (!reserva || !reserva.datos_evento) return;
 
     const datos = JSON.parse(reserva.datos_evento);
-    const estadoEvento = tipo_pago === 'total' ? 'activo' : 'borrador';
+    const esPrivado = datos.es_publico === false;
+    // El evento pasa a "activo" cuando la reserva queda confirmada por el organizador:
+    // - Privado: alcanza con la seña — no hay cartelera pública de por medio, la reserva
+    //   ya está tomada y el organizador necesita gestionar invitaciones sobre un evento real.
+    // - Público: recién con el pago total, para no listarlo en la cartelera antes de
+    //   estar plenamente confirmado.
+    const estadoEvento = (tipo_pago === 'total' || esPrivado) ? 'activo' : 'borrador';
     const estadoReserva = tipo_pago === 'total' ? 'confirmada' : 'seña_abonada';
 
     // Evento privado: ya fue creado como borrador al hacer la reserva — actualizar estado
