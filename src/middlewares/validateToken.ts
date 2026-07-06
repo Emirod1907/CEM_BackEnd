@@ -28,3 +28,21 @@ const authRequired = async (
   }
 };
 export default authRequired;
+
+// Autenticación opcional: si hay cookie de sesión válida, popula req.persona;
+// si no hay o es inválida, continúa igual (sin 401). Útil para endpoints públicos
+// que ajustan su respuesta según el usuario logueado (ej: términos con su comisión).
+export const authOptional = async (
+  req: Request,
+  _res: Response,
+  next: NextFunction
+) => {
+  try {
+    const { token } = req.cookies;
+    if (token) {
+      const decoded = await verifyToken(token);
+      req.persona = decoded;
+    }
+  } catch { /* token inválido/expirado → seguir sin persona */ }
+  next();
+};

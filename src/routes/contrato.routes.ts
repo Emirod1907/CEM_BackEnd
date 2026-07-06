@@ -1,5 +1,5 @@
 import { Router } from 'express'
-import authRequired from '../middlewares/validateToken'
+import authRequired, { authOptional } from '../middlewares/validateToken'
 import {
     getTerminosActuales,
     aceptarContrato,
@@ -8,8 +8,9 @@ import {
 
 const router = Router()
 
-// Público: devuelve T&C vigentes, comisión y hash para mostrar al proveedor antes de aceptar
-router.get('/terminos-actuales', getTerminosActuales)
+// Público (auth opcional): devuelve T&C vigentes, comisión y hash. Si el usuario está
+// logueado, resuelve la comisión de SU perfil; si no, muestra los valores por defecto.
+router.get('/terminos-actuales', authOptional, getTerminosActuales)
 
 // Requiere auth: el proveedor acepta el contrato
 router.post('/aceptar', authRequired, aceptarContrato)
