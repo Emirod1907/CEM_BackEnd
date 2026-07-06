@@ -8,6 +8,7 @@ import Contrato from '../models/contrato';
 import { Op, Transaction } from 'sequelize';
 import db from '../db/connection';
 import { logger } from '../libs/logger';
+import { calcularReembolso, MotivoCancelacion, MOTIVOS_CANCELACION } from '../services/reembolso.service';
 
 const PORCENTAJE_SENA = 0.30;
 const HORAS_LIMITE_PAGO = 48;
@@ -558,24 +559,113 @@ export const eliminarReservaCancelada: RequestHandler = async (req: Request, res
     }
 };
 
-// DELETE /api/reservas/:id/cancelar
+// Suma lo efectivamente abonado por una reserva (órdenes aprobadas).
+async function montoAbonadoDeReserva(reserva_id: number | string): Promise<number> {
+    const ordenes = await Orden.findAll({
+        where: { reserva_id, estado: 'aprobado' },
+        attributes: ['monto_total'],
+    });
+    return ordenes.reduce((acc, o) => acc + (Number((o as any).monto_total) || 0), 0);
+}
+
+// Normaliza el motivo recibido; por defecto 'voluntaria'.
+function parseMotivo(raw: any): MotivoCancelacion {
+    return MOTIVOS_CANCELACION.includes(raw) ? raw : 'voluntaria';
+}
+
+// GET /api/reservas/:id/cancelacion-preview?motivo=voluntaria|fuerza_mayor|arrepentimiento
+// Devuelve el cálculo de reembolso SIN cancelar, para mostrarlo antes de confirmar.
+export const getCancelacionPreview: RequestHandler = async (req: Request, res: Response) => {
+    const { id } = req.params;
+    const persona_id = req.persona!.id_persona;
+    const motivo = parseMotivo(req.query.motivo);
+    try {
+        const reserva = await Reserva.findOne({ where: { id_reserva: id, persona_id } });
+        if (!reserva) return res.status(404).json({ message: 'Reserva no encontrada' });
+        if (reserva.estado === 'cancelada') {
+            return res.status(400).json({ message: 'La reserva ya está cancelada' });
+        }
+
+        const montoAbonado = await montoAbonadoDeReserva(id);
+        // Reserva sin pago: no hay reembolso que calcular
+        if (reserva.estado === 'pendiente_pago' || montoAbonado <= 0) {
+            return res.json({
+                requiere_reembolso: false,
+                monto_abonado: montoAbonado,
+                message: 'La reserva no tiene pagos: se cancela sin reembolso.',
+            });
+        }
+
+        const reembolso = calcularReembolso({
+            montoAbonado,
+            fechaEvento: reserva.fecha as any,
+            fechaCompra: (reserva as any).createdAt ?? null,
+            motivo,
+        });
+        return res.json({ requiere_reembolso: true, ...reembolso });
+    } catch (error: any) {
+        return res.status(500).json({ message: 'Error al calcular el reembolso', error: error.message });
+    }
+};
+
+// DELETE /api/reservas/:id/cancelar   (motivo por query o body)
+// Cancela la reserva. Si estaba pagada, calcula el reembolso según la escala por
+// anticipación y lo registra en datos_evento.cancelacion (el pago real es posterior).
 export const cancelarReserva: RequestHandler = async (req: Request, res: Response) => {
     const { id } = req.params;
     const persona_id = req.persona!.id_persona;
+    const motivo = parseMotivo(req.body?.motivo ?? req.query.motivo);
     try {
         const reserva = await Reserva.findOne({ where: { id_reserva: id, persona_id } });
         if (!reserva) {
             return res.status(404).json({ message: 'Reserva no encontrada' });
         }
-        if (reserva.estado !== 'pendiente_pago') {
-            return res.status(400).json({ message: 'Solo se pueden cancelar reservas pendientes de pago' });
+        if (reserva.estado === 'cancelada') {
+            return res.status(400).json({ message: 'La reserva ya está cancelada' });
         }
+
+        const montoAbonado = await montoAbonadoDeReserva(id);
+        let reembolso: ReturnType<typeof calcularReembolso> | null = null;
+
+        if (montoAbonado > 0 && reserva.estado !== 'pendiente_pago') {
+            // Reserva pagada: aplicar escala por anticipación / fuerza mayor / arrepentimiento
+            reembolso = calcularReembolso({
+                montoAbonado,
+                fechaEvento: reserva.fecha as any,
+                fechaCompra: (reserva as any).createdAt ?? null,
+                motivo,
+            });
+
+            // Registrar el reembolso en datos_evento (sin cambio de esquema). El pago real
+            // del reembolso queda pendiente de ejecución (igual que las liquidaciones).
+            try {
+                const datos = reserva.datos_evento ? JSON.parse(reserva.datos_evento) : {};
+                datos.cancelacion = {
+                    fecha: new Date().toISOString(),
+                    ...reembolso,
+                    reembolso_estado: 'pendiente',
+                };
+                await reserva.update({ datos_evento: JSON.stringify(datos) });
+            } catch { /* si datos_evento no parsea, seguimos igual */ }
+
+            logger.info('[Reserva] Cancelación con reembolso', {
+                reserva_id: id, motivo,
+                porcentaje: reembolso.porcentaje_reembolso,
+                monto_reembolso: reembolso.monto_reembolso,
+            });
+        }
+
         // Cancelar la reserva y todas sus órdenes para liberar cupos de servicios
         await reserva.update({ estado: 'cancelada' });
         await Orden.update({ estado: 'cancelado' }, { where: { reserva_id: id } });
         // Vía A: quitar el evento del Google Calendar del dueño (best-effort)
         borrarEventoReserva(reserva).catch(() => {});
-        return res.json({ message: 'Reserva cancelada exitosamente' });
+
+        return res.json({
+            message: 'Reserva cancelada exitosamente',
+            requiere_reembolso: !!reembolso,
+            reembolso,
+        });
     } catch (error: any) {
         return res.status(500).json({ message: 'Error al cancelar reserva', error: error.message });
     }
