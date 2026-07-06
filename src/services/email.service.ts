@@ -380,3 +380,51 @@ export const sendRegistrationConfirmationEmail = async (
         html: htmlContent,
     });
 };
+
+// Notifica a un usuario que cambiaron las condiciones de comisión de su tipo de contrato
+export const sendComisionActualizadaEmail = async (
+    toEmail: string,
+    nombre: string,
+    perfilLabel: string,
+    cambios: { clienteAnt: number; clienteNue: number; provAnt: number; provNue: number },
+): Promise<void> => {
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+    const fila = (l: string, a: number, n: number) => a !== n
+        ? `<tr><td style="padding:8px 0;color:#555;font-size:14px;">${l}</td><td style="text-align:right;font-size:14px;"><span style="color:#999;text-decoration:line-through;">${a}%</span> &nbsp;→&nbsp; <strong style="color:#770981;">${n}%</strong></td></tr>`
+        : `<tr><td style="padding:8px 0;color:#555;font-size:14px;">${l}</td><td style="text-align:right;font-size:14px;color:#333;">${n}% <span style="color:#999;">(sin cambios)</span></td></tr>`;
+    const html = `
+<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"/></head>
+<body style="margin:0;padding:0;background:#f4f4f4;font-family:'Poppins',Arial,sans-serif;">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f4;padding:40px 0;"><tr><td align="center">
+<table width="600" cellpadding="0" cellspacing="0" style="background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,.12);">
+  <tr><td style="background:linear-gradient(to right,#770981,#1882da);padding:32px 30px;text-align:center;">
+    <h1 style="margin:0;color:#fff;font-family:'Raleway',Arial,sans-serif;font-size:24px;letter-spacing:2px;">Dream Events</h1>
+    <p style="margin:6px 0 0;color:rgba(255,255,255,.85);font-size:13px;">Actualización de condiciones del contrato</p>
+  </td></tr>
+  <tr><td style="padding:30px 40px 10px;">
+    <h2 style="margin:0 0 10px;color:#333;font-family:'Raleway',Arial,sans-serif;font-size:19px;">Hola ${nombre},</h2>
+    <p style="margin:0 0 6px;color:#555;font-size:14px;line-height:1.7;">
+      Te informamos que se actualizaron las <strong>comisiones de la plataforma</strong> para tu tipo de contrato
+      (<strong>${perfilLabel}</strong>). Estas condiciones aplican a las nuevas operaciones.
+    </p>
+  </td></tr>
+  <tr><td style="padding:6px 40px 20px;">
+    <table width="100%" cellpadding="0" cellspacing="0" style="border-top:1px solid #eee;border-bottom:1px solid #eee;">
+      ${fila('Comisión cliente', cambios.clienteAnt, cambios.clienteNue)}
+      ${fila('Comisión proveedor', cambios.provAnt, cambios.provNue)}
+    </table>
+  </td></tr>
+  <tr><td style="padding:0 40px 30px;text-align:center;">
+    <a href="${frontendUrl}" style="display:inline-block;background:linear-gradient(135deg,#770981,#1882da);color:#fff;text-decoration:none;padding:12px 28px;border-radius:8px;font-weight:600;font-size:14px;">Ir a Dream Events</a>
+  </td></tr>
+  <tr><td style="padding:16px 40px;background:#faf7fd;text-align:center;color:#9a8aa5;font-size:12px;">
+    Este es un aviso automático sobre cambios en las condiciones del contrato.
+  </td></tr>
+</table></td></tr></table></body></html>`;
+    await transporter.sendMail({
+        from: `"Dream Events" <${process.env.EMAIL_USER}>`,
+        to: toEmail,
+        subject: `Cambio en las comisiones de tu contrato — ${perfilLabel}`,
+        html,
+    });
+};
