@@ -11,7 +11,8 @@ import OrdenDesglose from '../models/ordenDesglose';
 import MovimientoPozo from '../models/movimientoPozo';
 import { logger } from '../libs/logger';
 import db from '../db/connection';
-import { getMpCredentials, getMpNotificationUrl, getMpBackUrls } from '../config/mercadopago';
+import { getMpCredentials, getMpNotificationUrl, getMpBackUrls, decryptToken } from '../config/mercadopago';
+import Persona from '../models/persona';
 import { emitirEntradaPagada } from './invitacion.controller';
 import { montoAlquilerVigente } from './reserva.controller';
 
@@ -204,11 +205,13 @@ export const crearPreferenciaOrganizador: RequestHandler = async (req: Request, 
 
         // Comisión del cliente: frozen desde el contrato vigente del dueño del salón
         let comisionClientePct = 0
+        let duenoId: number | null = null
         try {
             const salonData = await Salon.findByPk(reserva.salon_id, { attributes: ['dueno_id'] })
             if ((salonData as any)?.dueno_id) {
+                duenoId = Number((salonData as any).dueno_id)
                 const contrato = await Contrato.findOne({
-                    where: { persona_id: (salonData as any).dueno_id, estado: 'vigente', ambito: 'salon' },
+                    where: { persona_id: duenoId, estado: 'vigente', ambito: 'salon' },
                     attributes: ['comision_cliente_porcentaje'],
                 })
                 if (contrato) comisionClientePct = Number(contrato.comision_cliente_porcentaje)
@@ -218,7 +221,33 @@ export const crearPreferenciaOrganizador: RequestHandler = async (req: Request, 
         }
         const factorComision = 1 + comisionClientePct / 100
 
-        const client = getMpClient();
+        // ── MercadoPago Marketplace (split real al dueño del salón) ──────────────
+        // Guardado por flag: si MP_MARKETPLACE_SPLIT=true y el dueño conectó su MP,
+        // la preferencia se crea con SU access_token y la plataforma retiene su margen
+        // como marketplace_fee. Si no, el flujo normal (cobra la plataforma).
+        let client = getMpClient();
+        let marketplaceFee: number | undefined
+        if (process.env.MP_MARKETPLACE_SPLIT === 'true' && duenoId) {
+            try {
+                const dueno = await Persona.findByPk(duenoId, { attributes: ['mp_access_token'] })
+                const tokenCifrado = (dueno as any)?.mp_access_token
+                if (tokenCifrado) {
+                    client = new MercadoPagoConfig({ accessToken: decryptToken(tokenCifrado) })
+                    // El dueño recibe su neto del salón (base); la plataforma retiene el
+                    // resto (markup de comisión + servicios) como fee para luego liquidar.
+                    const netoDueno = tipo_pago === 'seña'
+                        ? +(monto_alquiler * 0.30).toFixed(2)
+                        : +monto_alquiler.toFixed(2)
+                    const totalConComision = +(monto_total * (tipo_pago === 'seña' ? 0.30 : 1) * factorComision).toFixed(2)
+                    marketplaceFee = +Math.max(0, totalConComision - netoDueno).toFixed(2)
+                    logger.info('[Pago] Split marketplace activo', { reserva_id, duenoId, marketplaceFee })
+                }
+            } catch (e: any) {
+                logger.warn('[Pago] Split marketplace falló, uso flujo normal', { error: e.message })
+                client = getMpClient()
+                marketplaceFee = undefined
+            }
+        }
         const preference = new Preference(client);
 
         let mpItems: any[];
@@ -300,6 +329,7 @@ export const crearPreferenciaOrganizador: RequestHandler = async (req: Request, 
                     back_urls: getMpBackUrls(),
                     auto_return: 'approved' as const,
                     external_reference: String(orden.id_orden),
+                    ...(marketplaceFee !== undefined ? { marketplace_fee: marketplaceFee } : {}),
                     ...(getMpNotificationUrl() ? { notification_url: getMpNotificationUrl() } : {}),
                     metadata: {
                         persona_id: persona.id_persona,

@@ -19,7 +19,11 @@ interface PersonaAtributos {
     perfil_completado?: boolean,
     categoria_servicio?: string,
     google_calendar_token?: string | null,
-    google_calendar_id?: string | null
+    google_calendar_id?: string | null,
+    // MercadoPago Marketplace (vendedor: dueño de salón / proveedor)
+    mp_access_token?: string | null,   // cifrado
+    mp_refresh_token?: string | null,  // cifrado
+    mp_user_id?: string | null         // collector_id del vendedor
 }
 
 class Persona extends Model<PersonaAtributos> implements PersonaAtributos {
@@ -37,6 +41,9 @@ class Persona extends Model<PersonaAtributos> implements PersonaAtributos {
     declare categoria_servicio: string;
     declare google_calendar_token: string | null;
     declare google_calendar_id: string | null;
+    declare mp_access_token: string | null;
+    declare mp_refresh_token: string | null;
+    declare mp_user_id: string | null;
 }
 
 Persona.init({
@@ -124,6 +131,19 @@ Persona.init({
         allowNull: true
     },
     google_calendar_id: {
+        type: DataTypes.STRING,
+        allowNull: true
+    },
+    // MercadoPago Marketplace (vendedor): tokens cifrados + collector_id
+    mp_access_token: {
+        type: DataTypes.TEXT,
+        allowNull: true
+    },
+    mp_refresh_token: {
+        type: DataTypes.TEXT,
+        allowNull: true
+    },
+    mp_user_id: {
         type: DataTypes.STRING,
         allowNull: true
     }

@@ -3,6 +3,7 @@ import authRequired from '../middlewares/validateToken';
 import contratoVigenteRequired from '../middlewares/contratoVigenteRequired';
 import { getSalones, getSalon , crearSalon, updateSalon, deleteSalon, getDisponibilidadSalon, getMiSalon, getMiSalonReservas, actualizarPreciosSalon, gestionarReservaDueno, crearReservaManual, getSalonesDisponibles } from '../controllers/salon.controller'
 import { googleCalendarConnect, googleCalendarCallback, googleCalendarStatus, googleCalendarDisconnect, importarCalendario, sincronizarReservasExistentes } from '../controllers/calendar.controller'
+import { mpConnect, mpCallback, mpStatus, mpDisconnect } from '../controllers/mpMarketplace.controller'
 
 const router = Router()
 
@@ -20,6 +21,11 @@ router.get('/google/status', authRequired, googleCalendarStatus)
 router.post('/google/disconnect', authRequired, googleCalendarDisconnect)
 router.post('/google/importar', authRequired, importarCalendario)
 router.post('/google/sync-reservas', authRequired, sincronizarReservasExistentes)
+// MercadoPago Marketplace (vendedor: dueño de salón)
+router.get('/mp/connect', authRequired, mpConnect)
+router.get('/mp/callback', mpCallback)
+router.get('/mp/status', authRequired, mpStatus)
+router.post('/mp/disconnect', authRequired, mpDisconnect)
 router.get('/:id/disponibilidad', authRequired, getDisponibilidadSalon)
 router.get('/:id', authRequired, getSalon)
 router.post('/new', authRequired, contratoVigenteRequired('salon'), crearSalon)
