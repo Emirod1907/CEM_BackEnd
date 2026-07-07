@@ -9,6 +9,7 @@ import { Op, Transaction } from 'sequelize';
 import db from '../db/connection';
 import { logger } from '../libs/logger';
 import { calcularReembolso, MotivoCancelacion, MOTIVOS_CANCELACION } from '../services/reembolso.service';
+import { ejecutarReembolsoReserva } from '../services/reembolsoMp.service';
 
 const PORCENTAJE_SENA = 0.30;
 const HORAS_LIMITE_PAGO = 48;
@@ -626,32 +627,15 @@ export const cancelarReserva: RequestHandler = async (req: Request, res: Respons
 
         const montoAbonado = await montoAbonadoDeReserva(id);
         let reembolso: ReturnType<typeof calcularReembolso> | null = null;
+        const esPaga = montoAbonado > 0 && reserva.estado !== 'pendiente_pago';
 
-        if (montoAbonado > 0 && reserva.estado !== 'pendiente_pago') {
+        if (esPaga) {
             // Reserva pagada: aplicar escala por anticipación / fuerza mayor / arrepentimiento
             reembolso = calcularReembolso({
                 montoAbonado,
                 fechaEvento: reserva.fecha as any,
                 fechaCompra: (reserva as any).createdAt ?? null,
                 motivo,
-            });
-
-            // Registrar el reembolso en datos_evento (sin cambio de esquema). El pago real
-            // del reembolso queda pendiente de ejecución (igual que las liquidaciones).
-            try {
-                const datos = reserva.datos_evento ? JSON.parse(reserva.datos_evento) : {};
-                datos.cancelacion = {
-                    fecha: new Date().toISOString(),
-                    ...reembolso,
-                    reembolso_estado: 'pendiente',
-                };
-                await reserva.update({ datos_evento: JSON.stringify(datos) });
-            } catch { /* si datos_evento no parsea, seguimos igual */ }
-
-            logger.info('[Reserva] Cancelación con reembolso', {
-                reserva_id: id, motivo,
-                porcentaje: reembolso.porcentaje_reembolso,
-                monto_reembolso: reembolso.monto_reembolso,
             });
         }
 
@@ -661,10 +645,44 @@ export const cancelarReserva: RequestHandler = async (req: Request, res: Respons
         // Vía A: quitar el evento del Google Calendar del dueño (best-effort)
         borrarEventoReserva(reserva).catch(() => {});
 
+        // Ejecutar el reembolso real vía MercadoPago (best-effort) sobre los pagos de la reserva
+        let ejecucion: Awaited<ReturnType<typeof ejecutarReembolsoReserva>> | null = null;
+        if (reembolso && reembolso.porcentaje_reembolso > 0) {
+            try {
+                ejecucion = await ejecutarReembolsoReserva(id, reembolso.porcentaje_reembolso);
+            } catch (e: any) {
+                logger.error('[Reserva] Error ejecutando reembolso MP', { reserva_id: id, error: e?.message });
+            }
+        }
+
+        // Registrar la cancelación y el resultado de la ejecución en datos_evento (sin cambio de esquema)
+        if (reembolso) {
+            try {
+                const datos = reserva.datos_evento ? JSON.parse(reserva.datos_evento) : {};
+                datos.cancelacion = {
+                    fecha: new Date().toISOString(),
+                    ...reembolso,
+                    // 'ejecutado' | 'parcial' | 'error' | 'sin_pagos' según el resultado real;
+                    // 'no_corresponde' si el % es 0 (no hay nada que devolver).
+                    reembolso_estado: reembolso.porcentaje_reembolso === 0 ? 'no_corresponde' : (ejecucion?.estado ?? 'pendiente'),
+                    ejecucion: ejecucion ?? undefined,
+                };
+                await reserva.update({ datos_evento: JSON.stringify(datos) });
+            } catch { /* si datos_evento no parsea, seguimos igual */ }
+
+            logger.info('[Reserva] Cancelación con reembolso', {
+                reserva_id: id, motivo,
+                porcentaje: reembolso.porcentaje_reembolso,
+                monto_reembolso: reembolso.monto_reembolso,
+                ejecucion: ejecucion?.estado ?? 'pendiente',
+            });
+        }
+
         return res.json({
             message: 'Reserva cancelada exitosamente',
             requiere_reembolso: !!reembolso,
             reembolso,
+            ejecucion,
         });
     } catch (error: any) {
         return res.status(500).json({ message: 'Error al cancelar reserva', error: error.message });
