@@ -14,6 +14,8 @@ interface OrdenDesgloseAtributos {
     estado_liquidacion: 'pendiente' | 'liquidado' | 'facturado'
     factura_id?: number | null
     fecha?: Date
+    fecha_liquidacion?: Date | null          // cuándo se ejecutó la liquidación
+    beneficiario_mp_user_id?: string | null  // collector_id del vendedor que cobra (si conectó MP)
 }
 
 class OrdenDesglose extends Model<OrdenDesgloseAtributos> implements OrdenDesgloseAtributos {
@@ -29,6 +31,8 @@ class OrdenDesglose extends Model<OrdenDesgloseAtributos> implements OrdenDesglo
     declare estado_liquidacion: 'pendiente' | 'liquidado' | 'facturado'
     declare factura_id: number | null
     declare fecha: Date
+    declare fecha_liquidacion: Date | null
+    declare beneficiario_mp_user_id: string | null
 }
 
 OrdenDesglose.init({
@@ -91,6 +95,16 @@ OrdenDesglose.init({
         type: DataTypes.DATE,
         allowNull: false,
         defaultValue: DataTypes.NOW,
+    },
+    fecha_liquidacion: {
+        type: DataTypes.DATE,
+        allowNull: true,
+        defaultValue: null,
+    },
+    beneficiario_mp_user_id: {
+        type: DataTypes.STRING,
+        allowNull: true,
+        defaultValue: null,
     },
 }, {
     sequelize: db,

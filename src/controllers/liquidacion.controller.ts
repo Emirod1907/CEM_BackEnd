@@ -4,6 +4,7 @@ import Factura from '../models/factura'
 import Orden from '../models/orden'
 import Reserva from '../models/reserva'
 import Salon from '../models/salon'
+import Persona from '../models/persona'
 import { emitirFactura, ArcaError } from '../services/arca.service'
 import { logger } from '../libs/logger'
 
@@ -78,11 +79,31 @@ export const getLiquidaciones: RequestHandler = async (req: any, res, next) => {
         const reservaMap = new Map(reservas.map(r => [r.id_reserva, r]))
         const rol        = rolDesde(req)
 
-        const resultado = desgloses.map(d => ({
-            ...filtrarDesglose(d, rol),
-            orden:   ordenMap.get(d.orden_id)?.toJSON() ?? null,
-            reserva: d.reserva_id ? (reservaMap.get(d.reserva_id) as any)?.toJSON() ?? null : null,
-        }))
+        // Estado de conexión MercadoPago de los dueños de salón (beneficiarios de la liquidación)
+        const duenoIds = [...new Set(reservas.map(r => (r as any).Salon?.dueno_id).filter(Boolean))] as number[]
+        const duenos = duenoIds.length > 0
+            ? await Persona.findAll({ where: { id_persona: duenoIds }, attributes: ['id_persona', 'nombre', 'apellido', 'mp_access_token', 'mp_user_id'] })
+            : []
+        const duenoMap = new Map(duenos.map(p => [p.id_persona, p]))
+
+        const resultado = desgloses.map(d => {
+            const reserva = d.reserva_id ? (reservaMap.get(d.reserva_id) as any) : null
+            const duenoId = reserva ? (reserva as any).Salon?.dueno_id : null
+            const dueno   = duenoId ? (duenoMap.get(duenoId) as any) : null
+            return {
+                ...filtrarDesglose(d, rol),
+                fecha_liquidacion: (d as any).fecha_liquidacion ?? null,
+                beneficiario_mp_user_id: (d as any).beneficiario_mp_user_id ?? null,
+                orden:   ordenMap.get(d.orden_id)?.toJSON() ?? null,
+                reserva: reserva?.toJSON() ?? null,
+                beneficiario: dueno ? {
+                    persona_id: dueno.id_persona,
+                    nombre: `${dueno.nombre} ${dueno.apellido}`,
+                    mp_conectado: !!dueno.mp_access_token,
+                    mp_user_id: dueno.mp_user_id ?? null,
+                } : null,
+            }
+        })
 
         res.json({ liquidaciones: resultado })
     } catch (err) {
@@ -196,6 +217,53 @@ export const emitirFacturaHandler: RequestHandler = async (req, res, next) => {
                 next(arcaErr)
             }
         }
+    } catch (err) {
+        next(err)
+    }
+}
+
+// ── POST /api/admin/liquidaciones/:orden_id/liquidar ──────────────────────────
+// Ejecuta la liquidación (settlement) del neto del vendedor: marca el desglose como
+// 'liquidado', registra la fecha y el beneficiario (collector_id del dueño si conectó
+// su MercadoPago). El pago real se coordina contra la cuenta MP conectada del vendedor.
+export const liquidarDesglose: RequestHandler = async (req, res, next) => {
+    try {
+        const { orden_id } = req.params
+        const desglose = await OrdenDesglose.findOne({ where: { orden_id } })
+        if (!desglose) {
+            res.status(404).json({ message: 'Esta orden no tiene desglose de liquidación' })
+            return
+        }
+        if (desglose.estado_liquidacion !== 'pendiente') {
+            res.json({ ok: true, ya_liquidado: true, desglose: desglose.toJSON() })
+            return
+        }
+
+        // Resolver el beneficiario (dueño del salón) y su conexión MercadoPago
+        let beneficiario_mp_user_id: string | null = null
+        let mp_conectado = false
+        if (desglose.reserva_id) {
+            const reserva = await Reserva.findByPk(desglose.reserva_id, { attributes: ['salon_id'] })
+            if (reserva) {
+                const salon = await Salon.findByPk((reserva as any).salon_id, { attributes: ['dueno_id'] })
+                if ((salon as any)?.dueno_id) {
+                    const dueno = await Persona.findByPk((salon as any).dueno_id, { attributes: ['mp_access_token', 'mp_user_id'] })
+                    mp_conectado = !!(dueno as any)?.mp_access_token
+                    beneficiario_mp_user_id = (dueno as any)?.mp_user_id ?? null
+                }
+            }
+        }
+
+        await desglose.update({
+            estado_liquidacion: 'liquidado',
+            fecha_liquidacion: new Date(),
+            beneficiario_mp_user_id,
+        })
+        logger.info('[Liquidacion] Desglose liquidado', {
+            orden_id, monto_neto: desglose.monto_neto_proveedor, mp_conectado, beneficiario_mp_user_id,
+        })
+
+        res.json({ ok: true, mp_conectado, desglose: desglose.toJSON() })
     } catch (err) {
         next(err)
     }
