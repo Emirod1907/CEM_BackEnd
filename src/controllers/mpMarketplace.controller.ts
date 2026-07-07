@@ -11,7 +11,9 @@ import { logger } from '../libs/logger'
 
 const BACKEND = (process.env.BACKEND_URL || 'http://localhost:8000').replace(/\/$/, '')
 const FRONTEND = (process.env.FRONTEND_URL || 'http://localhost:5173').replace(/\/$/, '')
-const REDIRECT_URI = `${BACKEND}/api/salones/mp/callback`
+// MercadoPago exige que el redirect_uri coincida EXACTO con el registrado en la app
+// y normalmente que sea HTTPS. Se puede override con MP_REDIRECT_URI (ej. túnel ngrok).
+const REDIRECT_URI = (process.env.MP_REDIRECT_URI || `${BACKEND}/api/salones/mp/callback`).trim()
 const STATE_SECRET = process.env.JWT_SECRET || 'dream-mp-state'
 
 // Credenciales de la aplicación Marketplace (clientId/clientSecret de MP)
