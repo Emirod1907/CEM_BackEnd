@@ -262,6 +262,8 @@ export const applyPostMigrationSchemaPatches = async (connection: Connection): P
 
   await addColumnIfMissing(connection, 'Contratos', 'comision_proveedor_porcentaje', 'comision_proveedor_porcentaje DECIMAL(5,2) NOT NULL DEFAULT 3');
   await addColumnIfMissing(connection, 'Contratos', 'ambito', "ambito ENUM('salon','proveedor') NOT NULL DEFAULT 'salon'");
+  // Ampliar el enum de ámbito para incluir 'consumidor' (aceptación de T&C en checkout)
+  await modifyColumnIfExists(connection, 'Contratos', 'ambito', "ambito ENUM('salon','proveedor','consumidor') NOT NULL DEFAULT 'salon'");
   await renameColumnIfNeeded(connection, 'Contratos', 'comision_porcentaje', 'comision_cliente_porcentaje', 'DECIMAL(5,2) NOT NULL');
 
   await addColumnIfMissing(connection, 'reservas', 'estado', "estado ENUM('pendiente_pago','seña_abonada','confirmada','cancelada') NOT NULL DEFAULT 'confirmada'");

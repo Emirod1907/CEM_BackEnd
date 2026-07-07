@@ -4,6 +4,8 @@ import {
     getTerminosActuales,
     aceptarContrato,
     getMiContrato,
+    getTerminosConsumidor,
+    aceptarTerminosConsumidor,
 } from '../controllers/contrato.controller'
 
 const router = Router()
@@ -17,5 +19,10 @@ router.post('/aceptar', authRequired, aceptarContrato)
 
 // Requiere auth: devuelve el contrato vigente del usuario logueado
 router.get('/mi-contrato', authRequired, getMiContrato)
+
+// Público: bases y condiciones del consumidor + política de cancelación (checkout)
+router.get('/terminos-consumidor', getTerminosConsumidor)
+// Requiere auth: el consumidor acepta las bases antes de pagar (firma electrónica)
+router.post('/aceptar-consumidor', authRequired, aceptarTerminosConsumidor)
 
 export default router

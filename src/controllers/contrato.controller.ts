@@ -1,6 +1,7 @@
 import { RequestHandler } from 'express'
 import Contrato from '../models/contrato'
-import { VERSION_TERMINOS, COMISION_DEFAULT, COMISION_PROVEEDOR_DEFAULT, TEXTO_TERMINOS, hashTerminos } from '../config/terminos'
+import { VERSION_TERMINOS, COMISION_DEFAULT, COMISION_PROVEEDOR_DEFAULT, TEXTO_TERMINOS, hashTerminos,
+    VERSION_TERMINOS_CONSUMIDOR, TEXTO_TERMINOS_CONSUMIDOR, hashTerminosConsumidor, POLITICA_CANCELACION } from '../config/terminos'
 import ConfiguracionComision, { TIPOS_PERFIL, TipoPerfil } from '../models/configuracionComision'
 import Persona from '../models/persona'
 import Rol from '../models/rol'
@@ -214,5 +215,64 @@ export const getMiContrato: RequestHandler = async (req, res) => {
     } catch (error) {
         logger.error('[Contratos] Error al obtener contrato', { error, persona_id })
         return res.status(500).json({ message: 'Error interno del servidor.' })
+    }
+}
+
+// GET /api/contratos/terminos-consumidor  (público)
+// Bases y condiciones del CONSUMIDOR + política de cancelación, para mostrarlas en el
+// checkout antes de pagar (información previa clara, Ley 24.240).
+export const getTerminosConsumidor: RequestHandler = async (_req, res) => {
+    try {
+        return res.json({
+            version: VERSION_TERMINOS_CONSUMIDOR,
+            texto_terminos: TEXTO_TERMINOS_CONSUMIDOR,
+            hash_terminos: hashTerminosConsumidor(),
+            politica_cancelacion: POLITICA_CANCELACION,
+        })
+    } catch (error) {
+        logger.error('[Contratos] Error al obtener términos de consumidor', { error })
+        return res.status(500).json({ message: 'Error interno del servidor.' })
+    }
+}
+
+// POST /api/contratos/aceptar-consumidor  (requiere auth)
+// Registra la aceptación del consumidor ANTES de pagar (firma electrónica por
+// transacción). Append-only: cada aceptación queda como registro para auditoría.
+export const aceptarTerminosConsumidor: RequestHandler = async (req, res) => {
+    const persona_id = req.persona?.id_persona
+    const { acepto } = req.body
+    if (acepto !== true) {
+        return res.status(400).json({ message: 'Debés aceptar las bases y condiciones enviando { "acepto": true }.' })
+    }
+    try {
+        const forwarded = req.headers['x-forwarded-for']
+        const ip_aceptacion = (typeof forwarded === 'string'
+            ? forwarded.split(',')[0].trim()
+            : Array.isArray(forwarded) ? forwarded[0] : null
+        ) ?? req.ip ?? 'desconocida'
+        const user_agent = (req.headers['user-agent'] as string) ?? 'desconocido'
+
+        const contrato = await Contrato.create({
+            persona_id: persona_id!,
+            ambito: 'consumidor',
+            version_terminos: VERSION_TERMINOS_CONSUMIDOR,
+            comision_cliente_porcentaje: 0,
+            comision_proveedor_porcentaje: 0,
+            texto_terminos: TEXTO_TERMINOS_CONSUMIDOR,
+            hash_terminos: hashTerminosConsumidor(),
+            aceptado: true,
+            fecha_aceptacion: new Date(),
+            ip_aceptacion,
+            user_agent,
+            estado: 'vigente',
+        })
+
+        logger.info('[Contratos] Bases de consumidor aceptadas', {
+            id_contrato: contrato.id_contrato, persona_id, version: VERSION_TERMINOS_CONSUMIDOR, ip: ip_aceptacion,
+        })
+        return res.status(201).json({ message: 'Aceptación registrada.', id_contrato: contrato.id_contrato })
+    } catch (error) {
+        logger.error('[Contratos] Error al aceptar bases de consumidor', { error, persona_id })
+        return res.status(500).json({ message: 'Error interno al registrar la aceptación.' })
     }
 }

@@ -174,3 +174,111 @@ condiciones en todas sus cláusulas.`
 
 export const hashTerminos = (): string =>
     createHash('sha256').update(TEXTO_TERMINOS, 'utf8').digest('hex')
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TÉRMINOS DEL CONSUMIDOR (cliente / entusiasta / organizador que contrata para sí)
+// Se muestran y aceptan en el checkout, ANTES de pagar (información previa clara,
+// art. 4 Ley 24.240) y se registra la firma electrónica de la aceptación.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const VERSION_TERMINOS_CONSUMIDOR = 'v1.0'
+
+// Escala por anticipación (debe reflejar reembolso.service.ts). Estructurada para
+// mostrarla en el checkout.
+export const POLITICA_CANCELACION = [
+    { rango: '60 días o más de anticipación', reembolso: 100 },
+    { rango: '30 a 59 días', reembolso: 80 },
+    { rango: '15 a 29 días', reembolso: 60 },
+    { rango: '7 a 14 días', reembolso: 40 },
+    { rango: 'Menos de 7 días', reembolso: 0 },
+]
+
+export const TEXTO_TERMINOS_CONSUMIDOR = `BASES Y CONDICIONES PARA USUARIOS CONSUMIDORES
+DREAM EVENTS — Versión ${VERSION_TERMINOS_CONSUMIDOR}
+Fecha de vigencia: 01/06/2026
+
+================================================================================
+
+1. OBJETO Y ROL DE LA PLATAFORMA
+
+Dream Events es una plataforma que intermedia entre usuarios consumidores y los
+prestadores (dueños de salón y proveedores de servicios/insumos), actuando como
+AGENTE DE COBRO. La plataforma percibe el pago del consumidor y liquida a cada
+prestador lo que le corresponde. La prestación efectiva del servicio es
+responsabilidad directa del prestador.
+
+Estas bases aplican a quien contrata como CONSUMIDOR FINAL: el particular que
+reserva un evento para sí, y el asistente que compra una entrada a un evento.
+
+--------------------------------------------------------------------------------
+
+2. PRECIO Y FORMA DE PAGO
+
+El precio publicado es el precio final que paga el consumidor. Para reservas de
+salón puede abonarse una SEÑA (30%) para confirmar la fecha, y el saldo hasta el
+total según se informe. El pago se procesa a través de MercadoPago.
+
+--------------------------------------------------------------------------------
+
+3. POLÍTICA DE CANCELACIÓN Y REEMBOLSO (LEY 24.240)
+
+Esta política se informa ANTES del pago y rige los reembolsos al consumidor:
+
+a) FUERZA MAYOR / CASO FORTUITO (art. 1730 CCyC): ante un hecho imprevisible e
+   inevitable (catástrofe, fallecimiento de familiar directo, prohibición estatal,
+   etc.), el consumidor tiene derecho al REEMBOLSO ÍNTEGRO (100%), sin penalidad
+   ni retención, acreditando el hecho.
+
+b) DERECHO DE ARREPENTIMIENTO (art. 34 Ley 24.240 / art. 1110 CCyC): el consumidor
+   puede arrepentirse dentro de los DIEZ (10) DÍAS CORRIDOS desde la contratación,
+   con reembolso total, siempre que la prestación no haya comenzado.
+
+c) CANCELACIÓN VOLUNTARIA — ESCALA POR ANTICIPACIÓN (sobre lo efectivamente abonado):
+   - 60 días o más de anticipación al evento .......... reembolso 100%
+   - 30 a 59 días .................................... reembolso 80%
+   - 15 a 29 días .................................... reembolso 60%
+   - 7 a 14 días ..................................... reembolso 40%
+   - Menos de 7 días ................................. reembolso 0% (penalidad)
+
+La retención cubre el lucro cesante de los prestadores que reservaron la fecha y
+los costos administrativos. La fuerza mayor y el arrepentimiento anulan toda
+retención.
+
+d) ENTRADAS A EVENTOS: la entrada individual no es reembolsable una vez emitida,
+   salvo ejercicio del derecho de arrepentimiento. Si el organizador cancela el
+   evento, el consumidor recibe el 100%. Si se reprograma, puede optar entre
+   mantener la entrada o solicitar el reembolso.
+
+--------------------------------------------------------------------------------
+
+4. INMUTABILIDAD DE LA RESERVA Y CAMBIO DE FECHA
+
+Una vez pagada, la reserva del salón es inmutable, salvo el CAMBIO DE FECHA dentro
+del mismo salón, hasta la fecha límite informada, abonando la penalidad y/o la
+diferencia de precio (feriado / fin de semana / día hábil). La fuerza mayor habilita
+la cancelación con reembolso íntegro por encima de esta regla.
+
+--------------------------------------------------------------------------------
+
+5. DERECHOS DEL CONSUMIDOR
+
+El consumidor goza de todos los derechos de la Ley 24.240 de Defensa del Consumidor.
+Toda cláusula que desnaturalice las obligaciones o limite abusivamente la
+responsabilidad se tendrá por no escrita (art. 37). Ante un reclamo, el consumidor
+puede recurrir a la autoridad de aplicación y a las vías de defensa del consumidor.
+
+--------------------------------------------------------------------------------
+
+6. FIRMA ELECTRÓNICA
+
+La aceptación de estas bases antes del pago constituye firma electrónica (Ley 25.506).
+Se registran: identidad del usuario, fecha y hora (UTC), dirección IP, navegador,
+versión de los términos y hash SHA-256 del texto aceptado.
+
+================================================================================
+
+Al tildar "Acepto las bases y condiciones" antes de pagar, el consumidor declara
+haber leído y comprendido la política de cancelación y reembolso aquí detallada.`
+
+export const hashTerminosConsumidor = (): string =>
+    createHash('sha256').update(TEXTO_TERMINOS_CONSUMIDOR, 'utf8').digest('hex')
