@@ -328,6 +328,7 @@ export const applyPostMigrationSchemaPatches = async (connection: Connection): P
   await addColumnIfMissing(connection, 'agenda_proveedor', 'fecha_limite', 'fecha_limite DATE NULL');
   await addColumnIfMissing(connection, 'agenda_proveedor', 'domicilio', 'domicilio TEXT NULL');
 
+  await addColumnIfMissing(connection, 'serviciosadicionales', 'marca', 'marca VARCHAR(120) NULL');
   await addColumnIfMissing(connection, 'OrdenDesglose', 'fecha_liquidacion', 'fecha_liquidacion DATETIME NULL');
   await addColumnIfMissing(connection, 'OrdenDesglose', 'beneficiario_mp_user_id', 'beneficiario_mp_user_id VARCHAR(50) NULL');
   await addIndexIfMissing(connection, 'OrdenDesglose', 'idx_desglose_estado', 'INDEX idx_desglose_estado (estado_liquidacion)');

@@ -5,6 +5,7 @@ interface ServicioAtributos {
     id_servicio?: number;
     nombre: string;
     descripcion: string;
+    marca?: string | null;              // Marca del producto (opcional)
     precio: number;
     precio_base?: number | null;        // Lo que recibe el proveedor (antes de comisión)
     categoria: string;
@@ -28,6 +29,7 @@ class ServicioAdicional extends Model<ServicioAtributos> implements ServicioAtri
     declare id_servicio: number;
     declare nombre: string;
     declare descripcion: string;
+    declare marca: string | null;
     declare precio: number;
     declare precio_base: number | null;
     declare categoria: string;
@@ -60,6 +62,10 @@ ServicioAdicional.init({
     descripcion: {
         type: DataTypes.STRING(500),
         allowNull: false
+    },
+    marca: {
+        type: DataTypes.STRING(120),
+        allowNull: true
     },
     precio: {
         type: DataTypes.DECIMAL(10, 2),

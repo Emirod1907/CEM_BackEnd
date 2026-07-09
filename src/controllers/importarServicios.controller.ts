@@ -17,6 +17,7 @@ interface FilaValida {
     fila: number
     nombre: string
     descripcion: string
+    marca: string | null
     precio_base: number
     precio: number
     categoria: string
@@ -101,6 +102,9 @@ function validarFila(row: Record<string, any>, idx: number): FilaValida | FilaIn
         capacidad_maxima = n
     }
 
+    // Marca (opcional)
+    const marca = String(row.marca ?? '').trim() || null
+
     // Construir descripcion: base + presentación si existe
     let descripcion = String(row.descripcion ?? '').trim()
     const presentacion = String(row.presentacion ?? '').trim()
@@ -133,6 +137,7 @@ function validarFila(row: Record<string, any>, idx: number): FilaValida | FilaIn
         fila: num,
         nombre,
         descripcion,
+        marca,
         precio_base: precioRaw,
         precio: 0, // se calcula después con la comisión
         categoria,
@@ -178,17 +183,17 @@ export const getPlantillaExcel: RequestHandler = (_req, res, next) => {
     try {
         // Planilla de productos de tienda: producto, presentación, precio, categoría,
         // y el descuento por volumen (a partir de X unidades, Y% off)
-        const HEADERS  = ['producto', 'presentacion', 'precio', 'categoria', 'cantidad_min_descuento', 'descuento_porcentaje']
-        const EJEMPLO1 = ['Gaseosa Cola', 'Botella 2.25L', 2500, 'bebidas', 12, 10]
-        const EJEMPLO2 = ['Agua mineral', 'Pack x6 500ml', 3000, 'bebidas', 24, 15]
-        const EJEMPLO3 = ['Papas fritas', 'Paquete 500g',  1800, 'comida', '', '']
+        const HEADERS  = ['producto', 'marca', 'presentacion', 'precio', 'categoria', 'cantidad_min_descuento', 'descuento_porcentaje']
+        const EJEMPLO1 = ['Gaseosa Cola', 'Coca-Cola',      'Botella 2.25L', 2500, 'bebidas', 12, 10]
+        const EJEMPLO2 = ['Agua mineral', 'Villavicencio',  'Pack x6 500ml', 3000, 'bebidas', 24, 15]
+        const EJEMPLO3 = ['Papas fritas', 'Lays',           'Paquete 500g',  1800, 'comida', '', '']
 
         const wb = XLSX.utils.book_new()
         const ws = XLSX.utils.aoa_to_sheet([HEADERS, EJEMPLO1, EJEMPLO2, EJEMPLO3])
 
         // Ancho de columnas
         ws['!cols'] = [
-            { wch: 24 }, { wch: 22 }, { wch: 12 }, { wch: 14 }, { wch: 22 }, { wch: 20 },
+            { wch: 24 }, { wch: 18 }, { wch: 22 }, { wch: 12 }, { wch: 14 }, { wch: 22 }, { wch: 20 },
         ]
 
         // Hoja de referencia con las categorías válidas
@@ -291,6 +296,7 @@ export const confirmarImportarExcel: RequestHandler = async (req: any, res, next
         const registros = validas.map(f => ({
             nombre:          f.nombre,
             descripcion:     f.descripcion,
+            marca:           f.marca,
             precio_base:     f.precio_base,
             precio:          f.precio,
             categoria:       f.categoria,
