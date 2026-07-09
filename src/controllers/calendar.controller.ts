@@ -28,8 +28,11 @@ export const googleCalendarConnect: RequestHandler = (req: Request, res: Respons
         return res.status(500).json({ message: 'Google OAuth no está configurado en el servidor' });
     }
     const pid = req.persona!.id_persona;
-    // state firmado: identifica al dueño en el callback sin depender de la cookie
-    const state = jwt.sign({ pid }, STATE_SECRET, { expiresIn: '10m' });
+    // Pantalla de retorno (mi-salon para dueños, mis-servicios para proveedores)
+    const origenRaw = String(req.query.origen || 'mi-salon');
+    const origen = ['mi-salon', 'mis-servicios', 'mi-catalogo'].includes(origenRaw) ? origenRaw : 'mi-salon';
+    // state firmado: identifica al dueño + origen en el callback sin depender de la cookie
+    const state = jwt.sign({ pid, origen }, STATE_SECRET, { expiresIn: '10m' });
     const params = new URLSearchParams({
         client_id: GOOGLE_CLIENT_ID,
         redirect_uri: REDIRECT_URI,
@@ -45,7 +48,8 @@ export const googleCalendarConnect: RequestHandler = (req: Request, res: Respons
 
 // GET /api/salones/google/callback — Google redirige acá con el code; guardamos el refresh_token
 export const googleCalendarCallback: RequestHandler = async (req: Request, res: Response) => {
-    const back = (estado: string) => `${FRONTEND}/mi-salon?calendar=${estado}`;
+    let origen = 'mi-salon';
+    const back = (estado: string) => `${FRONTEND}/${origen}?calendar=${estado}`;
     const { code, state, error } = req.query as Record<string, string>;
 
     if (error) return res.redirect(back('cancelado'));
@@ -53,7 +57,9 @@ export const googleCalendarCallback: RequestHandler = async (req: Request, res: 
 
     let pid: number;
     try {
-        pid = (jwt.verify(String(state), STATE_SECRET) as any).pid;
+        const decoded = jwt.verify(String(state), STATE_SECRET) as any;
+        pid = decoded.pid;
+        if (decoded.origen) origen = decoded.origen;
     } catch {
         return res.redirect(back('error'));
     }
