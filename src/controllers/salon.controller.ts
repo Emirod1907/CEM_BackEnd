@@ -1,5 +1,6 @@
 import { Request, RequestHandler, Response } from "express";
 import Salon from "../models/salon";
+import Orden from "../models/orden";
 import Reserva from "../models/reserva";
 import Persona from "../models/persona";
 import Contrato from "../models/contrato";
@@ -103,12 +104,27 @@ export const getMiSalonReservas: RequestHandler = async (req: Request, res: Resp
             order: [['fecha', 'ASC']]
         });
 
+        // Monto efectivamente abonado por reserva = suma de órdenes aprobadas
+        const reservaIds = reservas.map(r => r.id_reserva);
+        const abonadoPorReserva = new Map<number, number>();
+        if (reservaIds.length > 0) {
+            const ordenes = await Orden.findAll({
+                where: { reserva_id: reservaIds, estado: 'aprobado' },
+                attributes: ['reserva_id', 'monto_total'],
+            });
+            for (const o of ordenes) {
+                const rid = Number((o as any).reserva_id);
+                abonadoPorReserva.set(rid, (abonadoPorReserva.get(rid) || 0) + (Number((o as any).monto_total) || 0));
+            }
+        }
+
         const resultado = reservas.map(r => {
             const json = r.toJSON() as any;
             return {
                 ...json,
                 datos_evento: r.datos_evento ? (() => { try { return JSON.parse(r.datos_evento!) } catch { return null } })() : null,
-                monto_sena: +(Number(r.monto_alquiler) * 0.30).toFixed(2)
+                monto_sena: +(Number(r.monto_alquiler) * 0.30).toFixed(2),
+                monto_abonado: +(abonadoPorReserva.get(r.id_reserva) || 0).toFixed(2),
             };
         });
 
