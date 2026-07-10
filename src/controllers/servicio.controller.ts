@@ -194,7 +194,7 @@ export const getMisReservasProveedor: RequestHandler = async (req: Request, res:
 // POST /api/servicios/mis-servicios — el proveedor crea un item en su tiendita
 export const crearServicioProveedor: RequestHandler = async (req: Request, res: Response) => {
     const proveedor_id = req.persona?.id_persona;
-    const { nombre, descripcion, precio, categoria, subcategoria, tipo_precio, tipo_item, imagen,
+    const { nombre, descripcion, marca, unidad, ideal_para_personas, precio, categoria, subcategoria, tipo_precio, tipo_item, imagen,
             capacidad_maxima, dias_anticipacion, dias_disponibles, horario_inicio, horario_fin,
             precios_tramos } = req.body;
     if (!nombre || !descripcion || !precio || !categoria) {
@@ -207,6 +207,9 @@ export const crearServicioProveedor: RequestHandler = async (req: Request, res: 
         const servicio = await ServicioAdicional.create({
             nombre,
             descripcion,
+            marca: marca || null,
+            unidad: unidad || null,
+            ideal_para_personas: ideal_para_personas != null && ideal_para_personas !== '' ? Number(ideal_para_personas) : null,
             precio: precioPublico,
             precio_base: precioBase,
             categoria,
@@ -240,7 +243,7 @@ export const updateServicioProveedor: RequestHandler = async (req: Request, res:
         if (servicio.proveedor_id !== proveedor_id) {
             return res.status(403).json({ message: 'No tenés permiso para editar este servicio' });
         }
-        const { nombre, descripcion, precio, categoria, subcategoria, tipo_precio, tipo_item, imagen, disponible,
+        const { nombre, descripcion, marca, unidad, ideal_para_personas, precio, categoria, subcategoria, tipo_precio, tipo_item, imagen, disponible,
                 capacidad_maxima, dias_anticipacion, dias_disponibles, horario_inicio, horario_fin,
                 precios_tramos } = req.body;
         // Si viene precio, es el precio base del proveedor: recalcular el público con la comisión
@@ -252,6 +255,11 @@ export const updateServicioProveedor: RequestHandler = async (req: Request, res:
         }
         await servicio.update({
             nombre, descripcion,
+            marca: marca !== undefined ? (marca || null) : servicio.marca,
+            unidad: unidad !== undefined ? (unidad || null) : servicio.unidad,
+            ideal_para_personas: ideal_para_personas !== undefined
+                ? (ideal_para_personas != null && ideal_para_personas !== '' ? Number(ideal_para_personas) : null)
+                : servicio.ideal_para_personas,
             precio: precioPublico,
             precio_base: precioBase,
             categoria, subcategoria: subcategoria || null, tipo_precio, tipo_item, imagen, disponible,

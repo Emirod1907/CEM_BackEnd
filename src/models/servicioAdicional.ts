@@ -6,6 +6,8 @@ interface ServicioAtributos {
     nombre: string;
     descripcion: string;
     marca?: string | null;              // Marca del producto (opcional)
+    unidad?: string | null;             // Unidad de medida/venta (ej. "por persona", "por porción")
+    ideal_para_personas?: number | null; // Combo pensado para N personas (para destacar por cupo)
     precio: number;
     precio_base?: number | null;        // Lo que recibe el proveedor (antes de comisión)
     categoria: string;
@@ -30,6 +32,8 @@ class ServicioAdicional extends Model<ServicioAtributos> implements ServicioAtri
     declare nombre: string;
     declare descripcion: string;
     declare marca: string | null;
+    declare unidad: string | null;
+    declare ideal_para_personas: number | null;
     declare precio: number;
     declare precio_base: number | null;
     declare categoria: string;
@@ -65,6 +69,14 @@ ServicioAdicional.init({
     },
     marca: {
         type: DataTypes.STRING(120),
+        allowNull: true
+    },
+    unidad: {
+        type: DataTypes.STRING(40),
+        allowNull: true
+    },
+    ideal_para_personas: {
+        type: DataTypes.INTEGER,
         allowNull: true
     },
     precio: {
