@@ -3,6 +3,8 @@ import Evento from '../models/evento'
 import Reserva from '../models/reserva'
 import Orden from '../models/orden'
 import Persona from '../models/persona'
+import Salon from '../models/salon'
+import Contrato from '../models/contrato'
 import Invitacion from '../models/invitacion'
 import InvitadoConfirmado from '../models/invitadoConfirmado'
 import MovimientoPozo from '../models/movimientoPozo'
@@ -97,8 +99,23 @@ export const getPozo: RequestHandler = async (req: Request, res: Response) => {
                 where: { reserva_id: reserva.id_reserva, tipo: 'organizador', estado: 'aprobado' },
                 attributes: ['monto_total', 'tipo_pago']
             })
+            // Comisión del cliente (contrato vigente del dueño del salón). El alquiler
+            // se muestra CON comisión incorporada, igual que en el resto del flujo.
+            let comisionClientePct = 0
+            try {
+                const salonData = await Salon.findByPk(reserva.salon_id, { attributes: ['dueno_id'] })
+                const duenoId = (salonData as any)?.dueno_id
+                if (duenoId) {
+                    const contrato = await Contrato.findOne({
+                        where: { persona_id: Number(duenoId), estado: 'vigente', ambito: 'salon' },
+                        attributes: ['comision_cliente_porcentaje'],
+                    })
+                    if (contrato) comisionClientePct = Number(contrato.comision_cliente_porcentaje)
+                }
+            } catch { /* sin contrato → sin comisión */ }
+            const factorComision = 1 + comisionClientePct / 100
             costo = {
-                monto_alquiler: Number(reserva.monto_alquiler) || 0,
+                monto_alquiler: +((Number(reserva.monto_alquiler) || 0) * factorComision).toFixed(2),
                 estado_reserva: reserva.estado,
                 pagado_organizador: +ordenesOrg.reduce((acc, o) => acc + Number(o.monto_total), 0).toFixed(2),
                 tipo_pago: ordenesOrg.find(o => o.tipo_pago === 'total') ? 'total' : (ordenesOrg.length > 0 ? 'seña' : null),
