@@ -44,7 +44,22 @@ export interface ItemServicio {
     turnos?: number | null;
     personas?: number | null;
     imagen?: string | null;
+    descuento_cantidad_min?: number | null;
+    descuento_porcentaje?: number | null;
 }
+
+// Precio unitario de un ítem aplicando su descuento por cantidad (mismo criterio
+// que el frontend en preciosUtils.precioUnitarioConDescuento): si la cantidad
+// alcanza el umbral, se descuenta el %. Necesario para que el cobro coincida
+// EXACTO con el desglose que ve el organizador (que ya muestra el descuento).
+const precioUnitConDescuento = (s: ItemServicio): number => {
+    const base = Number(s.precio) || 0;
+    const min  = Number(s.descuento_cantidad_min) || 0;
+    const pct  = Number(s.descuento_porcentaje) || 0;
+    const cant = Number(s.cantidad) || 1;
+    if (min > 1 && pct > 0 && cant >= min) return +(base * (1 - pct / 100)).toFixed(2);
+    return base;
+};
 
 // POST /api/pagos/crear-preferencia  (carrito cliente)
 export const crearPreferencia: RequestHandler = async (req: Request, res: Response) => {
@@ -199,7 +214,7 @@ export const crearPreferenciaOrganizador: RequestHandler = async (req: Request, 
             if      (s.tipo_precio === 'por_persona') multiplicador = Number(s.personas) > 0 ? Number(s.personas) : numInvitados;
             else if (s.tipo_precio === 'por_hora')    multiplicador = Number(s.horas)  > 0 ? Number(s.horas)  : 1;
             else if (s.tipo_precio === 'por_turno')   multiplicador = Number(s.turnos) > 0 ? Number(s.turnos) : 1;
-            return acc + Number(s.precio) * s.cantidad * multiplicador;
+            return acc + precioUnitConDescuento(s) * s.cantidad * multiplicador;
         }, 0);
         const monto_total = monto_alquiler + monto_servicios;
 
@@ -286,7 +301,7 @@ export const crearPreferenciaOrganizador: RequestHandler = async (req: Request, 
                         title: s.nombre,
                         description: s.descripcion || s.nombre,
                         quantity: s.cantidad * multiplicador,
-                        unit_price: +(Number(s.precio) * factorComision).toFixed(2),
+                        unit_price: +(precioUnitConDescuento(s) * factorComision).toFixed(2),
                         currency_id: 'ARS'
                     };
                 })
