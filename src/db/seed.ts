@@ -64,7 +64,8 @@ export const seed = async () => {
         try { await AutorizacionExcepcional.sync({ force: false }) } catch (_) {}
         try { await Contrato.sync({ force: false }) } catch (_) {}
         await MovimientoPozo.sync({ force: false });
-        try { await PedidoTorta.sync({ force: false }) } catch (_) {}
+        // alter:true → agrega columnas nuevas del modelo a la tabla existente sin perder datos
+        try { await PedidoTorta.sync({ alter: true }) } catch (_) {}
 
         // Seed de datos iniciales. No modificar estructura de base acá.
 

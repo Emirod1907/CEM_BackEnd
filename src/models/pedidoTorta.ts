@@ -38,12 +38,20 @@ interface PedidoTortaAtributos {
     precio_total?: number | null;
     sena_monto?: number | null;
     sena_pagada?: boolean;
+    monto_pagado?: number | null;         // total abonado hasta ahora
     fecha_limite_pago?: string | null;    // YYYY-MM-DD
 
     // ── Cambios / cancelación (features 5 y 6) ──
     fecha_limite_cambios?: string | null; // YYYY-MM-DD
+    politica_cancelacion?: string | null; // texto de la política (qué pasa con la seña, etc.)
+    sena_reembolsable?: boolean;
     desglose_precio?: string | null;      // JSON: componentes del precio (feature 8)
     cambios_log?: string | null;          // JSON: historial de cambios (feature 5)
+
+    // ── Vista cliente (features 10 y 11) ──
+    token_publico?: string | null;        // link para compartir con el cliente
+    confirmado_cliente?: boolean;
+    confirmado_cliente_fecha?: Date | null;
 
     notas?: string | null;
     created_at?: Date;
@@ -72,10 +80,16 @@ class PedidoTorta extends Model<PedidoTortaAtributos> implements PedidoTortaAtri
     declare precio_total: number | null;
     declare sena_monto: number | null;
     declare sena_pagada: boolean;
+    declare monto_pagado: number | null;
     declare fecha_limite_pago: string | null;
     declare fecha_limite_cambios: string | null;
+    declare politica_cancelacion: string | null;
+    declare sena_reembolsable: boolean;
     declare desglose_precio: string | null;
     declare cambios_log: string | null;
+    declare token_publico: string | null;
+    declare confirmado_cliente: boolean;
+    declare confirmado_cliente_fecha: Date | null;
     declare notas: string | null;
     declare created_at: Date;
 }
@@ -107,10 +121,16 @@ PedidoTorta.init({
     precio_total:     { type: DataTypes.DECIMAL(10, 2), allowNull: true, defaultValue: 0 },
     sena_monto:       { type: DataTypes.DECIMAL(10, 2), allowNull: true, defaultValue: 0 },
     sena_pagada:      { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
+    monto_pagado:     { type: DataTypes.DECIMAL(10, 2), allowNull: true, defaultValue: 0 },
     fecha_limite_pago:    { type: DataTypes.DATEONLY, allowNull: true, defaultValue: null },
     fecha_limite_cambios: { type: DataTypes.DATEONLY, allowNull: true, defaultValue: null },
+    politica_cancelacion: { type: DataTypes.TEXT, allowNull: true, defaultValue: null },
+    sena_reembolsable:    { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
     desglose_precio:  { type: DataTypes.TEXT, allowNull: true, defaultValue: null },
     cambios_log:      { type: DataTypes.TEXT, allowNull: true, defaultValue: null },
+    token_publico:    { type: DataTypes.STRING(64), allowNull: true, defaultValue: null },
+    confirmado_cliente:       { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
+    confirmado_cliente_fecha: { type: DataTypes.DATE, allowNull: true, defaultValue: null },
     notas:            { type: DataTypes.TEXT, allowNull: true, defaultValue: null },
     created_at:       { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW },
 }, {
