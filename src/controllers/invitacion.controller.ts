@@ -42,7 +42,20 @@ const excedeCupo = async (evento_id: number, cupoRaw: any, nuevas: number) => {
     return null
 }
 
-const toInvitacionPublica = (inv: Invitacion, evento: any) => ({
+// Resuelve la imagen de portada: usa Evento.imagen y, si está vacía, cae a la
+// imagen guardada en datos_evento de la reserva (por si se cargó/cambió después
+// de crearse el evento borrador y no se sincronizó a Evento.imagen).
+const resolverImagenEvento = async (evento: any): Promise<string> => {
+    if (!evento) return ''
+    if (evento.imagen) return evento.imagen
+    try {
+        const r = await Reserva.findOne({ where: { evento_id: evento.id_evento }, attributes: ['datos_evento'] })
+        if (r?.datos_evento) return JSON.parse(r.datos_evento).imagen || ''
+    } catch { /* ignore */ }
+    return ''
+}
+
+const toInvitacionPublica = (inv: Invitacion, evento: any, imagenResuelta?: string) => ({
     token: inv.token,
     num_invitados: inv.num_invitados,
     nombre_invitado: inv.nombre_invitado,
@@ -53,7 +66,7 @@ const toInvitacionPublica = (inv: Invitacion, evento: any) => ({
         nombre: evento.nombre,
         descripcion: evento.descripcion,
         fecha: evento.fecha,
-        imagen: evento.imagen,
+        imagen: imagenResuelta ?? evento.imagen,
         precio: evento.precio,
         datos_evento: evento.datos_evento
     } : null
@@ -234,7 +247,8 @@ export const getInvitacionPublica: RequestHandler = async (req: Request, res: Re
         }
 
         const evento = (invitacion as any).Evento
-        return res.json(toInvitacionPublica(invitacion, evento))
+        const imagen = await resolverImagenEvento(evento)
+        return res.json(toInvitacionPublica(invitacion, evento, imagen))
     } catch (error: any) {
         logger.error('[Invitacion] Error obteniendo invitación pública', { error: error.message })
         return res.status(500).json({ message: 'Error del servidor', error: error.message })
@@ -552,7 +566,7 @@ export const getOgPreview: RequestHandler = async (req: Request, res: Response) 
         })
         const evento = (invitacion as any)?.Evento
         const titulo = evento?.nombre || 'Invitación personal'
-        const imagen = evento?.imagen || ''
+        const imagen = await resolverImagenEvento(evento)
         const desc = [
             evento?.descripcion || 'Tenés una invitación personal para este evento privado.',
             evento?.fecha ? new Date(evento.fecha).toLocaleDateString('es-AR', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric', timeZone: 'UTC' }) : ''

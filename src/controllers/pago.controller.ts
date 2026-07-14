@@ -614,7 +614,12 @@ async function crearEventoDesdeReserva(
     // y re-afirmar la visibilidad desde datos_evento (el borrador podría no tenerla seteada)
     if (reserva.evento_id) {
         await Evento.update(
-            { estado: estadoEvento, es_publico: datos.es_publico !== false },
+            {
+                estado: estadoEvento,
+                es_publico: datos.es_publico !== false,
+                // Mantener la portada sincronizada con lo último cargado en datos_evento
+                ...(datos.imagen ? { imagen: datos.imagen } : {}),
+            },
             { where: { id_evento: reserva.evento_id }, transaction: t }
         );
         await reserva.update({ estado: estadoReserva }, { transaction: t });
