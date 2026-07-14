@@ -17,6 +17,7 @@ import valoracionesRoutes from '../routes/valoracion.routes';
 import contratosRoutes from '../routes/contrato.routes';
 import comisionesRoutes from '../routes/comision.routes';
 import autorizacionesRoutes from '../routes/autorizacion.routes';
+import pedidosTortaRoutes from '../routes/pedidoTorta.routes';
 import cookieParser from 'cookie-parser'
 import { seed } from '../db/seed'
 import passport from '../config/passport';
@@ -45,6 +46,7 @@ export class Server {
         contratos: '/api/contratos',
         comisiones: '/api/comisiones',
         autorizaciones: '/api/autorizaciones',
+        pedidosTorta: '/api/pedidos-torta',
     }
 
     constructor() {
@@ -130,6 +132,7 @@ export class Server {
         this.app.use(this.apiPaths.contratos, contratosRoutes);
         this.app.use(this.apiPaths.comisiones, comisionesRoutes);
         this.app.use(this.apiPaths.autorizaciones, autorizacionesRoutes);
+        this.app.use(this.apiPaths.pedidosTorta, pedidosTortaRoutes);
         // Error handler global — debe ir después de todas las rutas
         this.app.use(errorHandler);
     }

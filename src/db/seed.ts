@@ -14,7 +14,8 @@ import OrdenDesglose from '../models/ordenDesglose';
 import Factura from '../models/factura';
 import AutorizacionExcepcional from '../models/autorizacionExcepcional';
 import Contrato from '../models/contrato';
-import MovimientoPozo from '../models/movimientoPozo';
+import MovimientoPozo from '../models/movimientoPozo'
+import PedidoTorta from '../models/pedidoTorta';
 import { seedSalones } from './salones.seed';
 import { logger } from '../libs/logger';
 
@@ -63,6 +64,7 @@ export const seed = async () => {
         try { await AutorizacionExcepcional.sync({ force: false }) } catch (_) {}
         try { await Contrato.sync({ force: false }) } catch (_) {}
         await MovimientoPozo.sync({ force: false });
+        try { await PedidoTorta.sync({ force: false }) } catch (_) {}
 
         // Seed de datos iniciales. No modificar estructura de base acá.
 
