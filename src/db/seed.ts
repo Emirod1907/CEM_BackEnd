@@ -1,3 +1,5 @@
+import { DataTypes } from 'sequelize';
+import db from './connection';
 import Rol from '../models/rol';
 import Permiso from '../models/permiso';
 import RolPermiso from '../models/rolPermiso'; // registra asociaciones belongsToMany
@@ -66,6 +68,12 @@ export const seed = async () => {
         await MovimientoPozo.sync({ force: false });
         // alter:true → agrega columnas nuevas del modelo a la tabla existente sin perder datos
         try { await PedidoTorta.sync({ alter: true }) } catch (_) {}
+        // Columna ficha_torta en ServiciosAdicionales (agregado puntual y seguro; ignora si ya existe)
+        try {
+            await db.getQueryInterface().addColumn('ServiciosAdicionales', 'ficha_torta', {
+                type: DataTypes.TEXT, allowNull: true, defaultValue: null,
+            })
+        } catch (_) { /* la columna ya existe */ }
 
         // Seed de datos iniciales. No modificar estructura de base acá.
 

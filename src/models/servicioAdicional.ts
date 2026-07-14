@@ -25,6 +25,7 @@ interface ServicioAtributos {
     precios_tramos?: string | null;     // JSON array of pricing tiers
     descuento_cantidad_min?: number | null; // a partir de esta cantidad aplica el descuento
     descuento_porcentaje?: number | null;   // % de descuento por comprar en volumen
+    ficha_torta?: string | null;            // JSON: opciones que ofrece el pastelero (sabores, rellenos, etc.)
 }
 
 class ServicioAdicional extends Model<ServicioAtributos> implements ServicioAtributos {
@@ -51,6 +52,7 @@ class ServicioAdicional extends Model<ServicioAtributos> implements ServicioAtri
     declare precios_tramos: string | null;
     declare descuento_cantidad_min: number | null;
     declare descuento_porcentaje: number | null;
+    declare ficha_torta: string | null;
 }
 
 ServicioAdicional.init({
@@ -162,6 +164,11 @@ ServicioAdicional.init({
     },
     descuento_porcentaje: {
         type: DataTypes.DECIMAL(5, 2),
+        allowNull: true,
+        defaultValue: null
+    },
+    ficha_torta: {
+        type: DataTypes.TEXT,
         allowNull: true,
         defaultValue: null
     }

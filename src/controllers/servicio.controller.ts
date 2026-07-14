@@ -196,7 +196,7 @@ export const crearServicioProveedor: RequestHandler = async (req: Request, res: 
     const proveedor_id = req.persona?.id_persona;
     const { nombre, descripcion, marca, unidad, ideal_para_personas, precio, categoria, subcategoria, tipo_precio, tipo_item, imagen,
             capacidad_maxima, dias_anticipacion, dias_disponibles, horario_inicio, horario_fin,
-            precios_tramos } = req.body;
+            precios_tramos, ficha_torta } = req.body;
     if (!nombre || !descripcion || !precio || !categoria) {
         return res.status(400).json({ message: 'Faltan campos requeridos' });
     }
@@ -226,6 +226,9 @@ export const crearServicioProveedor: RequestHandler = async (req: Request, res: 
             precios_tramos: precios_tramos != null
                 ? (typeof precios_tramos === 'string' ? precios_tramos : JSON.stringify(precios_tramos))
                 : null,
+            ficha_torta: ficha_torta != null
+                ? (typeof ficha_torta === 'string' ? ficha_torta : JSON.stringify(ficha_torta))
+                : null,
         });
         return res.status(201).json({ servicio });
     } catch (error: any) {
@@ -245,7 +248,7 @@ export const updateServicioProveedor: RequestHandler = async (req: Request, res:
         }
         const { nombre, descripcion, marca, unidad, ideal_para_personas, precio, categoria, subcategoria, tipo_precio, tipo_item, imagen, disponible,
                 capacidad_maxima, dias_anticipacion, dias_disponibles, horario_inicio, horario_fin,
-                precios_tramos } = req.body;
+                precios_tramos, ficha_torta } = req.body;
         // Si viene precio, es el precio base del proveedor: recalcular el público con la comisión
         let precioBase = servicio.precio_base;
         let precioPublico = servicio.precio;
@@ -271,6 +274,9 @@ export const updateServicioProveedor: RequestHandler = async (req: Request, res:
             precios_tramos: precios_tramos != null
                 ? (typeof precios_tramos === 'string' ? precios_tramos : JSON.stringify(precios_tramos))
                 : null,
+            ficha_torta: ficha_torta !== undefined
+                ? (ficha_torta != null ? (typeof ficha_torta === 'string' ? ficha_torta : JSON.stringify(ficha_torta)) : null)
+                : servicio.ficha_torta,
         });
         return res.json({ servicio });
     } catch (error: any) {
