@@ -10,6 +10,17 @@ import { EMAILS_PERMITIDOS } from '../config/emailsPermitidos'
 
 const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
 
+// Cookie de sesión. Si el frontend está en otro dominio por HTTPS (producción:
+// Netlify/Vercel + backend en Railway), el navegador solo envía la cookie
+// cross-site si es SameSite=None + Secure. En local (http) se usa Lax.
+const crossSite = FRONTEND_URL.startsWith('https://');
+const COOKIE_OPTS = {
+    httpOnly: true as const,
+    secure: crossSite,
+    sameSite: (crossSite ? 'none' : 'lax') as 'none' | 'lax',
+    maxAge: 24 * 60 * 60 * 1000,
+};
+
 export const register = async(req:Request, res:Response)=>{
     
     if (!req.body || Object.keys(req.body).length === 0) {
@@ -37,12 +48,7 @@ export const register = async(req:Request, res:Response)=>{
         });
                 const token = await generateToken({ id_persona: newPersona.id_persona });
 
-        res.cookie('token', token, {
-            httpOnly: true,
-            secure: false,
-            sameSite: 'lax',
-            maxAge: 24 * 60 * 60 * 1000
-        }),
+        res.cookie('token', token, COOKIE_OPTS),
         res.json({
             msg:"Usuario creado con éxito",
             persona:{
@@ -79,13 +85,7 @@ export const login: RequestHandler = async(req:Request, res:Response)=>{
             return;
         }
         const token = await generateToken({id_persona: persona.id_persona})
-        res.cookie('token',token, {
-            httpOnly: true,
-            // secure: process.env.NODE_ENV==='production',
-            secure: false,
-            sameSite: 'lax',
-            maxAge: 24 * 60 * 60 * 1000
-        })
+        res.cookie('token', token, COOKIE_OPTS)
         return res.status(200).json({message:"Sesion iniciada con exito",
             id_persona: persona.id_persona,
             user: persona.nombre,
@@ -103,7 +103,7 @@ export const login: RequestHandler = async(req:Request, res:Response)=>{
     }
 }
 export const logout: RequestHandler = async( req:Request, res: Response)=>{
-    res.clearCookie('token');
+    res.clearCookie('token', { httpOnly: true, secure: crossSite, sameSite: (crossSite ? 'none' : 'lax') as 'none' | 'lax' });
     res.json({msg:"Sesion cerrada con Exito!"})
 }
 
@@ -114,12 +114,7 @@ export const googleCallback: RequestHandler = async (req: Request, res: Response
             return res.redirect(`${FRONTEND_URL}/login?error=acceso_no_autorizado`);
         }
         const token = await generateToken({ id_persona: persona.id_persona });
-        res.cookie('token', token, {
-            httpOnly: true,
-            secure: false,
-            sameSite: 'lax',
-            maxAge: 24 * 60 * 60 * 1000,
-        });
+        res.cookie('token', token, COOKIE_OPTS);
         return res.redirect(`${FRONTEND_URL}/auth/google/callback`);
     } catch (error) {
         return res.redirect(`${FRONTEND_URL}/login?error=google_auth_failed`);
