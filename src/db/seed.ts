@@ -4,6 +4,9 @@ import Rol from '../models/rol';
 import Permiso from '../models/permiso';
 import RolPermiso from '../models/rolPermiso'; // registra asociaciones belongsToMany
 import '../models/persona';                     // registra asociación Persona-Rol
+import '../models/salon';                        // tablas base (registran modelos para db.sync)
+import '../models/reserva';
+import '../models/evento';
 import Orden from '../models/orden';
 import ServicioAdicional from '../models/servicioAdicional';
 import Invitacion from '../models/invitacion';
@@ -48,6 +51,16 @@ const SERVICIOS_INICIALES = [
 
 export const seed = async () => {
     try {
+        // Crear TODO el esquema desde los modelos (Sequelize ordena las FK solo).
+        // Imprescindible en una base NUEVA (ej. Railway) donde las tablas base
+        // (Personas, Salon, Reserva, Evento…) todavía no existen. Es idempotente:
+        // usa CREATE TABLE IF NOT EXISTS, no toca tablas ya creadas.
+        try {
+            await db.sync({ force: false });
+        } catch (e) {
+            logger.warn?.('[Seed] db.sync parcial', { error: String(e) });
+        }
+
         // Crear tablas nuevas si no existen.
         // Los cambios estructurales de tablas viven en src/db/migrate.ts + schema-patches.ts.
         await Rol.sync({ force: false });
