@@ -11,6 +11,8 @@ interface PersonaAtributos {
     nombre: string,
     apellido: string,
     dni?: string,
+    cuit?: string,
+    celular?: string,
     fecha_nacimiento?: Date,
     email: string,
     nombre_usuario?: string,
@@ -32,6 +34,8 @@ class Persona extends Model<PersonaAtributos> implements PersonaAtributos {
     declare nombre: string;
     declare apellido: string;
     declare dni: string;
+    declare cuit: string;
+    declare celular: string;
     declare fecha_nacimiento: Date;
     declare email: string;
     declare nombre_usuario: string;
@@ -73,6 +77,32 @@ Persona.init({
                 if (value === null || value === undefined) return;
                 if (!/^\d{7,10}$/.test(value)) {
                     throw new Error('El DNI debe tener entre 7 y 10 dígitos numéricos');
+                }
+            }
+        }
+    },
+    cuit:{
+        type: DataTypes.STRING,
+        allowNull: true,
+        validate: {
+            cuitValido(value: string | null) {
+                if (value === null || value === undefined || value === '') return;
+                const soloDigitos = String(value).replace(/\D/g, '');
+                if (soloDigitos.length !== 11) {
+                    throw new Error('El CUIT debe tener 11 dígitos (ej. 20-12345678-9)');
+                }
+            }
+        }
+    },
+    celular:{
+        type: DataTypes.STRING,
+        allowNull: true,
+        validate: {
+            celularValido(value: string | null) {
+                if (value === null || value === undefined || value === '') return;
+                const soloDigitos = String(value).replace(/\D/g, '');
+                if (soloDigitos.length < 8 || soloDigitos.length > 15) {
+                    throw new Error('El celular debe tener entre 8 y 15 dígitos');
                 }
             }
         }

@@ -1,7 +1,7 @@
 import { Router } from "express";
 import type { RequestHandler } from "express";
 import { deletePersona, getPersona, getPersonas, postPersona, putPersona } from "../controllers/persona.controller";
-import { register , login, logout, verify, googleCallback, selectRole, completeProfile } from '../controllers/auth.controller';
+import { register , login, logout, verify, googleCallback, selectRole, completeProfile, completeRegistration } from '../controllers/auth.controller';
 import passport from '../config/passport';
 import { authLimiter } from '../middlewares/rateLimiter';
 import authRequired from '../middlewares/validateToken';
@@ -31,6 +31,7 @@ router.post('/logout', logout );
 router.get('/verify', verify )
 router.post('/select-role', authRequired, selectRole)
 router.post('/complete-profile', authRequired, completeProfile)
+router.post('/complete-registration', authRequired, completeRegistration)
 
 router.get(
     '/google',

@@ -24,6 +24,7 @@ import passport from '../config/passport';
 import { getMpCredentials, getMpEncryptionKey } from '../config/mercadopago';
 import { iniciarJobLiberacionVencidas } from '../jobs/liberarReservasVencidas';
 import { iniciarJobVerificarPagos } from '../jobs/verificarPagosPendientes';
+import { iniciarJobCuponCumpleanos } from '../jobs/cuponCumpleanos';
 import { obtenerCertificadoLocal } from '../libs/certLocal';
 import { verificarEmail } from '../services/email.service';
 import { logger } from '../libs/logger';
@@ -161,6 +162,7 @@ export class Server {
 
           iniciarJobLiberacionVencidas();
           iniciarJobVerificarPagos();
+          iniciarJobCuponCumpleanos();
           this.app.listen(this.port, () => {
           logger.info(`Servidor corriendo en puerto ${this.port}`);
         });

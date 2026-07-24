@@ -87,6 +87,17 @@ export const seed = async () => {
                 type: DataTypes.TEXT, allowNull: true, defaultValue: null,
             })
         } catch (_) { /* la columna ya existe */ }
+        // Columnas cuit y celular en Personas (registro + login Google; ignora si ya existen)
+        try {
+            await db.getQueryInterface().addColumn('Personas', 'cuit', {
+                type: DataTypes.STRING, allowNull: true, defaultValue: null,
+            })
+        } catch (_) { /* la columna ya existe */ }
+        try {
+            await db.getQueryInterface().addColumn('Personas', 'celular', {
+                type: DataTypes.STRING, allowNull: true, defaultValue: null,
+            })
+        } catch (_) { /* la columna ya existe */ }
 
         // Seed de datos iniciales. No modificar estructura de base acá.
 

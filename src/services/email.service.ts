@@ -465,3 +465,76 @@ export const sendComisionActualizadaEmail = async (
         html,
     });
 };
+
+// Correo promocional de cumpleaños: ofrece un cupón de descuento para organizar
+// el cumpleaños en la plataforma. Lo dispara el job diario cuponCumpleanos.
+export const sendCumpleanosCuponEmail = async (
+    toEmail: string,
+    nombre: string,
+    codigoCupon: string,
+    descuentoPorcentaje: number,
+): Promise<void> => {
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+    const html = `
+<!DOCTYPE html>
+<html lang="es">
+<head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>¡Feliz cumpleaños! — Dream Events</title></head>
+<body style="margin:0;padding:0;background:#f4f4f4;font-family:'Poppins',Arial,sans-serif;">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f4;padding:40px 0;"><tr><td align="center">
+<table width="600" cellpadding="0" cellspacing="0" style="background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,.15);">
+
+  <!-- Header -->
+  <tr><td style="background:linear-gradient(to right,#770981,#1882da);padding:36px 30px;text-align:center;">
+    <h1 style="margin:0;color:#fff;font-family:'Raleway',Arial,sans-serif;font-size:26px;letter-spacing:2px;">Dream Events</h1>
+    <p style="margin:6px 0 0;color:rgba(255,255,255,.85);font-size:13px;">Hacé realidad tu evento soñado</p>
+  </td></tr>
+
+  <!-- Saludo -->
+  <tr><td style="padding:34px 40px 12px;text-align:center;">
+    <div style="width:70px;height:70px;background:linear-gradient(135deg,#770981,#1882da);border-radius:50%;display:inline-flex;align-items:center;justify-content:center;margin-bottom:12px;">
+      <span style="font-size:34px;line-height:70px;color:#fff;">🎂</span>
+    </div>
+    <h2 style="margin:0 0 8px;color:#333;font-family:'Raleway',Arial,sans-serif;font-size:22px;">¡Feliz cumpleaños, ${nombre}!</h2>
+    <p style="margin:0;color:#555;font-size:14px;line-height:1.7;">
+      Todo Dream Events te desea un día increíble. Y qué mejor forma de festejarlo que
+      organizando <strong>tu propia fiesta de cumpleaños</strong> con nosotros.
+    </p>
+  </td></tr>
+
+  <!-- Cupón -->
+  <tr><td style="padding:8px 40px 20px;">
+    <table width="100%" cellpadding="0" cellspacing="0"><tr>
+      <td style="padding:22px;background:linear-gradient(135deg,#f9f0ff,#eef4ff);border-radius:12px;border:2px dashed #770981;text-align:center;">
+        <p style="margin:0 0 6px;color:#770981;font-size:13px;font-weight:700;letter-spacing:1px;text-transform:uppercase;">Tu regalo de cumpleaños</p>
+        <p style="margin:0 0 10px;color:#1882da;font-size:34px;font-weight:800;font-family:'Raleway',Arial,sans-serif;">${descuentoPorcentaje}% OFF</p>
+        <p style="margin:0 0 4px;color:#555;font-size:13px;">Usá este código al organizar tu evento:</p>
+        <p style="margin:0;display:inline-block;background:#fff;border:1px solid #d9c7ee;border-radius:8px;padding:10px 18px;font-family:monospace;font-size:18px;font-weight:700;color:#770981;letter-spacing:2px;">${codigoCupon}</p>
+      </td>
+    </tr></table>
+  </td></tr>
+
+  <!-- CTA -->
+  <tr><td align="center" style="padding:6px 40px 34px;">
+    <a href="${frontendUrl}/eventos/new" style="display:inline-block;background:linear-gradient(to right,#770981,#1882da);color:#fff;text-decoration:none;padding:14px 36px;border-radius:8px;font-size:15px;font-weight:600;letter-spacing:.5px;">
+      Organizar mi cumpleaños
+    </a>
+  </td></tr>
+
+  <!-- Footer -->
+  <tr><td style="padding:0 40px;"><hr style="border:none;border-top:1px solid #eee;"/></td></tr>
+  <tr><td style="padding:20px 40px;text-align:center;">
+    <p style="margin:0;color:#aaa;font-size:12px;line-height:1.6;">
+      Recibís este correo porque hoy es tu cumpleaños según los datos de tu cuenta.<br/>
+      &copy; ${new Date().getFullYear()} Dream Events. Todos los derechos reservados.
+    </p>
+  </td></tr>
+
+</table></td></tr></table></body></html>`.trim();
+
+    await transporter.sendMail({
+        from: REMITENTE(),
+        to: toEmail,
+        subject: `🎂 ¡Feliz cumple, ${nombre}! Tenés ${descuentoPorcentaje}% OFF para tu fiesta`,
+        html,
+    });
+};

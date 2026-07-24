@@ -28,7 +28,7 @@ export const register = async(req:Request, res:Response)=>{
             return res.status(400).json({ message: "Request body is missing" });
         }
 
-    const {nombre, apellido, dni, fecha_nacimiento, email, nombre_usuario, user_password}= req.body;
+    const {nombre, apellido, dni, cuit, celular, fecha_nacimiento, email, nombre_usuario, user_password}= req.body;
     try{
         const existingUser = await Persona.findOne({ where: { email } });
         if (existingUser) {
@@ -36,11 +36,13 @@ export const register = async(req:Request, res:Response)=>{
         }
 
         try {
-            const fechaNacimientoDate = new Date(fecha_nacimiento);
+            const fechaNacimientoDate = fecha_nacimiento ? new Date(fecha_nacimiento) : undefined;
             const newPersona = await Persona.create({
             nombre,
             apellido,
             dni,
+            cuit,
+            celular,
             fecha_nacimiento: fechaNacimientoDate,
             email,
             nombre_usuario,
@@ -136,10 +138,15 @@ export const verify = async ( req: Request, res: Response)=>{
         return res.json({
                 id_persona: personaFound.id_persona,
                 user: personaFound.nombre,
+                nombre: personaFound.nombre,
+                apellido: personaFound.apellido,
                 email: personaFound.email,
                 rol: (personaFound as any).Rol?.nombre || null,
                 perfil_completado: personaFound.perfil_completado,
-                categoria_servicio: personaFound.categoria_servicio || null
+                categoria_servicio: personaFound.categoria_servicio || null,
+                cuit: personaFound.cuit || null,
+                celular: personaFound.celular || null,
+                fecha_nacimiento: personaFound.fecha_nacimiento || null
         })
     }catch (error) {
         return res.status(401).json({ message: "Invalid or expired token" });
@@ -201,5 +208,32 @@ export const completeProfile: RequestHandler = async (req: Request, res: Respons
         return res.json({ message: 'Perfil completado correctamente', perfil_completado: true });
     } catch (error) {
         return res.status(500).json({ message: 'Error al completar perfil', error });
+    }
+};
+
+// Completar datos tras el login con Google: CUIT, celular y fecha de nacimiento.
+// El nombre, apellido y email ya vienen de Google. La fecha de nacimiento habilita
+// el cupón de descuento de cumpleaños (job diario cuponCumpleanos).
+export const completeRegistration: RequestHandler = async (req: Request, res: Response) => {
+    try {
+        const { cuit, celular, fecha_nacimiento } = req.body;
+
+        const persona = await Persona.findByPk(req.persona!.id_persona);
+        if (!persona) return res.status(404).json({ message: 'Usuario no encontrado' });
+
+        const updateData: any = {};
+        if (cuit) updateData.cuit = cuit;
+        if (celular) updateData.celular = celular;
+        if (fecha_nacimiento) updateData.fecha_nacimiento = new Date(fecha_nacimiento);
+
+        await persona.update(updateData);
+
+        return res.json({
+            message: 'Datos completados correctamente',
+            cuit: persona.cuit,
+            celular: persona.celular,
+        });
+    } catch (error: any) {
+        return res.status(500).json({ message: 'Error al completar datos', error: error?.message || error });
     }
 };
