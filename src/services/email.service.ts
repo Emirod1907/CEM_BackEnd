@@ -5,6 +5,8 @@ const transporter = nodemailer.createTransport({
     host: process.env.EMAIL_HOST || 'smtp.gmail.com',
     port: Number(process.env.EMAIL_PORT) || 587,
     secure: process.env.EMAIL_PORT === '465',
+    // El IPv4-first para evitar ENETUNREACH en Railway se fuerza globalmente
+    // con dns.setDefaultResultOrder('ipv4first') en app.ts (nodemailer no tipa `family`).
     auth: {
         user: process.env.EMAIL_USER,
         pass: process.env.EMAIL_PASS,
@@ -41,9 +43,17 @@ export const verificarEmail = async (): Promise<void> => {
         await transporter.verify();
         logger.info(`[Email] SMTP OK — envíos habilitados desde ${process.env.EMAIL_USER}`);
     } catch (err: any) {
-        logger.error('[Email] Credenciales SMTP rechazadas — los correos no se enviarán. '
-            + 'Si usás Gmail, necesitás 2-Step Verification + Contraseña de aplicación (no la contraseña normal).',
-            { error: err?.message });
+        const code: string = err?.code || '';
+        const erroresDeRed = ['ENETUNREACH', 'EHOSTUNREACH', 'ETIMEDOUT', 'ECONNREFUSED', 'EAI_AGAIN'];
+        if (erroresDeRed.includes(code)) {
+            logger.error('[Email] No se pudo CONECTAR al servidor SMTP (problema de RED, NO de credenciales). '
+                + 'En Railway/PaaS suele ser IPv6 sin salida (ENETUNREACH): se fuerza IPv4 con dns ipv4first / NODE_OPTIONS=--dns-result-order=ipv4first.',
+                { code, error: err?.message });
+        } else {
+            logger.error('[Email] Credenciales SMTP rechazadas — los correos no se enviarán. '
+                + 'Si usás Gmail, necesitás 2-Step Verification + Contraseña de aplicación (no la contraseña normal).',
+                { code, responseCode: err?.responseCode, error: err?.message });
+        }
     }
 };
 

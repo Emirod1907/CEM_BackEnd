@@ -69,6 +69,11 @@ export class Server {
 
     middlewares() {
 
+  // 0. Confiar en el primer proxy (Railway/hosting) para leer bien X-Forwarded-For.
+  // Sin esto, express-rate-limit tira ERR_ERL_UNEXPECTED_X_FORWARDED_FOR y no
+  // identifica correctamente al cliente por IP.
+  this.app.set('trust proxy', 1);
+
   // 3. Body parsing
   // El callback `verify` captura el raw body SOLO para el webhook de MercadoPago,
   // que necesita los bytes originales para validar la firma HMAC.
