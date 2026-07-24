@@ -1,17 +1,46 @@
 import nodemailer from 'nodemailer';
+import { isIP } from 'node:net';
+import { resolve4 } from 'node:dns/promises';
 import { logger } from '../libs/logger';
 
-const transporter = nodemailer.createTransport({
-    host: process.env.EMAIL_HOST || 'smtp.gmail.com',
-    port: Number(process.env.EMAIL_PORT) || 587,
-    secure: process.env.EMAIL_PORT === '465',
-    // El IPv4-first para evitar ENETUNREACH en Railway se fuerza globalmente
-    // con dns.setDefaultResultOrder('ipv4first') en app.ts (nodemailer no tipa `family`).
-    auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS,
-    },
-});
+const EMAIL_HOST = process.env.EMAIL_HOST || 'smtp.gmail.com';
+
+const crearTransporter = (host: string, servername?: string) =>
+    nodemailer.createTransport({
+        host,
+        port: Number(process.env.EMAIL_PORT) || 587,
+        secure: process.env.EMAIL_PORT === '465',
+        auth: {
+            user: process.env.EMAIL_USER,
+            pass: process.env.EMAIL_PASS,
+        },
+        // Si fijamos una IP como host, el servername conserva la validación del
+        // certificado TLS contra el hostname real (ej. smtp.gmail.com).
+        ...(servername ? { tls: { servername } } : {}),
+    });
+
+// Arranca apuntando al hostname (fallback). inicializarEmail() lo reemplaza por
+// una versión fijada a IPv4 apenas se resuelve el host.
+let transporter = crearTransporter(EMAIL_HOST);
+
+/**
+ * Railway (y varios PaaS) NO tienen salida IPv6. Nodemailer resuelve el host y
+ * elige una IP AL AZAR entre las IPv4 (A) e IPv6 (AAAA); si le toca una IPv6, la
+ * conexión falla con ENETUNREACH. Para evitarlo resolvemos una IPv4 nosotros y la
+ * usamos como host, conservando el servername para el certificado TLS.
+ */
+export const inicializarEmail = async (): Promise<void> => {
+    if (isIP(EMAIL_HOST)) return; // ya es una IP: nada que resolver
+    try {
+        const ips = await resolve4(EMAIL_HOST);
+        if (ips && ips.length) {
+            transporter = crearTransporter(ips[0], EMAIL_HOST);
+            logger.info(`[Email] SMTP fijado a IPv4 ${ips[0]} (servername ${EMAIL_HOST}) para evitar ENETUNREACH en Railway`);
+        }
+    } catch (err: any) {
+        logger.warn(`[Email] No se pudo pre-resolver IPv4 de ${EMAIL_HOST}; se usa el hostname`, { error: err?.message });
+    }
+};
 
 // Remitente mostrado en los correos. Gmail obliga a autenticar con la cuenta real
 // (EMAIL_USER), pero el nombre visible indica que es una casilla de notificación que
@@ -39,20 +68,25 @@ export const verificarEmail = async (): Promise<void> => {
             + 'Cargá un Gmail real + Contraseña de aplicación en el .env.');
         return;
     }
+    await inicializarEmail();
     try {
         await transporter.verify();
         logger.info(`[Email] SMTP OK — envíos habilitados desde ${process.env.EMAIL_USER}`);
     } catch (err: any) {
         const code: string = err?.code || '';
-        const erroresDeRed = ['ENETUNREACH', 'EHOSTUNREACH', 'ETIMEDOUT', 'ECONNREFUSED', 'EAI_AGAIN'];
-        if (erroresDeRed.includes(code)) {
+        const msg: string = err?.message || '';
+        // nodemailer envuelve los errores de socket como ESOCKET y deja el motivo
+        // real (ENETUNREACH, etc.) en el mensaje: hay que mirar ambos.
+        const esErrorDeRed = ['ENETUNREACH', 'EHOSTUNREACH', 'ETIMEDOUT', 'ECONNREFUSED', 'EAI_AGAIN', 'ESOCKET'].includes(code)
+            || /ENETUNREACH|EHOSTUNREACH|ETIMEDOUT|ECONNREFUSED/.test(msg);
+        if (esErrorDeRed) {
             logger.error('[Email] No se pudo CONECTAR al servidor SMTP (problema de RED, NO de credenciales). '
-                + 'En Railway/PaaS suele ser IPv6 sin salida (ENETUNREACH): se fuerza IPv4 con dns ipv4first / NODE_OPTIONS=--dns-result-order=ipv4first.',
-                { code, error: err?.message });
+                + 'En Railway/PaaS suele ser IPv6 sin salida (ENETUNREACH).',
+                { code, error: msg });
         } else {
             logger.error('[Email] Credenciales SMTP rechazadas — los correos no se enviarán. '
                 + 'Si usás Gmail, necesitás 2-Step Verification + Contraseña de aplicación (no la contraseña normal).',
-                { code, responseCode: err?.responseCode, error: err?.message });
+                { code, responseCode: err?.responseCode, error: msg });
         }
     }
 };
