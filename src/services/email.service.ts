@@ -26,12 +26,13 @@ export const emailConfigurado = (): boolean => {
 };
 
 // Cliente de Gmail (OAuth2 con refresh token). Se crea una sola vez.
+let oauthClient: InstanceType<typeof google.auth.OAuth2> | null = null;
 let gmailClient: ReturnType<typeof google.gmail> | null = null;
 const getGmail = () => {
     if (!gmailClient) {
-        const oauth2 = new google.auth.OAuth2(GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET);
-        oauth2.setCredentials({ refresh_token: GMAIL_REFRESH_TOKEN });
-        gmailClient = google.gmail({ version: 'v1', auth: oauth2 });
+        oauthClient = new google.auth.OAuth2(GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET);
+        oauthClient.setCredentials({ refresh_token: GMAIL_REFRESH_TOKEN });
+        gmailClient = google.gmail({ version: 'v1', auth: oauthClient });
     }
     return gmailClient;
 };
@@ -68,11 +69,15 @@ export const verificarEmail = async (): Promise<void> => {
         return;
     }
     try {
-        await getGmail().users.getProfile({ userId: 'me' });
+        getGmail(); // crea el cliente OAuth2
+        // getAccessToken() refresca el access token con el refresh token: valida
+        // client id/secret + refresh token SIN requerir scope de lectura. No se usa
+        // getProfile() porque el token es send-only (gmail.send) y daría 403 de scope.
+        await oauthClient!.getAccessToken();
         logger.info(`[Email] Gmail API OK — envíos habilitados desde ${EMAIL_USER}`);
     } catch (err: any) {
         logger.error('[Email] Gmail API rechazó las credenciales — los correos no se enviarán. '
-            + 'Revisá que GMAIL_REFRESH_TOKEN sea válido (scope gmail.send) y que la Gmail API esté habilitada en Google Cloud.',
+            + 'Revisá que GMAIL_REFRESH_TOKEN sea válido y que GOOGLE_CLIENT_ID/SECRET coincidan con los usados al generarlo.',
             { code: err?.code, error: err?.message });
     }
 };
