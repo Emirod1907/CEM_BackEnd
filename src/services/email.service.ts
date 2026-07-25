@@ -1,93 +1,79 @@
-import nodemailer from 'nodemailer';
-import { isIP } from 'node:net';
-import { resolve4 } from 'node:dns/promises';
+import { google } from 'googleapis';
+import MailComposer from 'nodemailer/lib/mail-composer';
 import { logger } from '../libs/logger';
 
-const EMAIL_HOST = process.env.EMAIL_HOST || 'smtp.gmail.com';
+// Envío de correos por la API REST de Gmail (HTTPS, puerto 443). Se usa en vez de
+// SMTP porque Railway bloquea los puertos SMTP salientes (25/465/587) y la conexión
+// a smtp.gmail.com termina en ETIMEDOUT. La Gmail API va por 443, que nunca se bloquea.
+const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
+const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
+const GMAIL_REFRESH_TOKEN = process.env.GMAIL_REFRESH_TOKEN;
+const EMAIL_USER = process.env.EMAIL_USER; // Gmail que autorizó y desde el que se envía
 
-const crearTransporter = (host: string, servername?: string) =>
-    nodemailer.createTransport({
-        host,
-        port: Number(process.env.EMAIL_PORT) || 587,
-        secure: process.env.EMAIL_PORT === '465',
-        auth: {
-            user: process.env.EMAIL_USER,
-            pass: process.env.EMAIL_PASS,
-        },
-        // Si fijamos una IP como host, el servername conserva la validación del
-        // certificado TLS contra el hostname real (ej. smtp.gmail.com).
-        ...(servername ? { tls: { servername } } : {}),
-    });
+// Remitente mostrado en los correos. Debe coincidir con la cuenta autenticada
+// (EMAIL_USER); el nombre visible indica que es una casilla que no se responde.
+const REMITENTE = () => process.env.EMAIL_FROM || `"Dream Events (no responder)" <${EMAIL_USER}>`;
 
-// Arranca apuntando al hostname (fallback). inicializarEmail() lo reemplaza por
-// una versión fijada a IPv4 apenas se resuelve el host.
-let transporter = crearTransporter(EMAIL_HOST);
-
-/**
- * Railway (y varios PaaS) NO tienen salida IPv6. Nodemailer resuelve el host y
- * elige una IP AL AZAR entre las IPv4 (A) e IPv6 (AAAA); si le toca una IPv6, la
- * conexión falla con ENETUNREACH. Para evitarlo resolvemos una IPv4 nosotros y la
- * usamos como host, conservando el servername para el certificado TLS.
- */
-export const inicializarEmail = async (): Promise<void> => {
-    if (isIP(EMAIL_HOST)) return; // ya es una IP: nada que resolver
-    try {
-        const ips = await resolve4(EMAIL_HOST);
-        if (ips && ips.length) {
-            transporter = crearTransporter(ips[0], EMAIL_HOST);
-            logger.info(`[Email] SMTP fijado a IPv4 ${ips[0]} (servername ${EMAIL_HOST}) para evitar ENETUNREACH en Railway`);
-        }
-    } catch (err: any) {
-        logger.warn(`[Email] No se pudo pre-resolver IPv4 de ${EMAIL_HOST}; se usa el hostname`, { error: err?.message });
-    }
-};
-
-// Remitente mostrado en los correos. Gmail obliga a autenticar con la cuenta real
-// (EMAIL_USER), pero el nombre visible indica que es una casilla de notificación que
-// no debe responderse. Configurable con EMAIL_FROM.
-const REMITENTE = () => process.env.EMAIL_FROM || `"Dream Events (no responder)" <${process.env.EMAIL_USER}>`;
-
-// Valores de ejemplo que trae el .env.example y que NO sirven para autenticarse.
+// Valores de ejemplo del .env.example que NO sirven para autenticarse.
 const PLACEHOLDERS_EMAIL = ['TU_EMAIL', 'TU_PASSWORD', 'TU_APP', 'CHANGEME', 'YOUR_EMAIL', 'XXXX'];
 
-// True solo si EMAIL_USER/EMAIL_PASS están presentes y no son placeholders del ejemplo.
+// True solo si están las credenciales de la Gmail API (client id/secret + refresh token + remitente).
 export const emailConfigurado = (): boolean => {
-    const user = (process.env.EMAIL_USER || '').trim();
-    const pass = (process.env.EMAIL_PASS || '').trim();
-    if (!user || !pass) return false;
+    const vals = [GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GMAIL_REFRESH_TOKEN, EMAIL_USER].map(v => (v || '').trim());
+    if (vals.some(v => !v)) return false;
     const esPlaceholder = (v: string) => PLACEHOLDERS_EMAIL.some(p => v.toUpperCase().includes(p));
-    return !esPlaceholder(user) && !esPlaceholder(pass);
+    return !vals.some(esPlaceholder);
 };
 
-// Verificación al arranque: avisa claramente si el SMTP no va a poder enviar,
+// Cliente de Gmail (OAuth2 con refresh token). Se crea una sola vez.
+let gmailClient: ReturnType<typeof google.gmail> | null = null;
+const getGmail = () => {
+    if (!gmailClient) {
+        const oauth2 = new google.auth.OAuth2(GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET);
+        oauth2.setCredentials({ refresh_token: GMAIL_REFRESH_TOKEN });
+        gmailClient = google.gmail({ version: 'v1', auth: oauth2 });
+    }
+    return gmailClient;
+};
+
+interface CorreoParams {
+    to: string;
+    subject: string;
+    html: string;
+    attachments?: any[];
+}
+
+// Compone el MIME con MailComposer (soporta HTML y adjuntos inline/cid). build()
+// es por callback, así que lo envolvemos en una promesa.
+const construirMime = (opts: any): Promise<Buffer> =>
+    new Promise((resolve, reject) => {
+        new MailComposer(opts).compile().build((err: Error | null, message: Buffer) => {
+            if (err) reject(err); else resolve(message);
+        });
+    });
+
+// Envía un correo por la API de Gmail (mensaje raw en base64url).
+const enviarCorreo = async ({ to, subject, html, attachments }: CorreoParams): Promise<void> => {
+    const mime = await construirMime({ from: REMITENTE(), to, subject, html, attachments });
+    const raw = mime.toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    await getGmail().users.messages.send({ userId: 'me', requestBody: { raw } });
+};
+
+// Verificación al arranque: avisa si la Gmail API no está configurada o el token no sirve,
 // en vez de fallar en silencio recién cuando se dispara el primer correo.
 export const verificarEmail = async (): Promise<void> => {
     if (!emailConfigurado()) {
-        logger.warn('[Email] SMTP NO configurado: EMAIL_USER/EMAIL_PASS vacíos o con valores de ejemplo. '
-            + 'Los correos (invitaciones, entradas, comisiones) NO se enviarán. '
-            + 'Cargá un Gmail real + Contraseña de aplicación en el .env.');
+        logger.warn('[Email] Gmail API NO configurada: faltan GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET / GMAIL_REFRESH_TOKEN / EMAIL_USER. '
+            + 'Los correos (invitaciones, entradas, cupones) NO se enviarán.');
         return;
     }
-    await inicializarEmail();
     try {
-        await transporter.verify();
-        logger.info(`[Email] SMTP OK — envíos habilitados desde ${process.env.EMAIL_USER}`);
+        await getGmail().users.getProfile({ userId: 'me' });
+        logger.info(`[Email] Gmail API OK — envíos habilitados desde ${EMAIL_USER}`);
     } catch (err: any) {
-        const code: string = err?.code || '';
-        const msg: string = err?.message || '';
-        // nodemailer envuelve los errores de socket como ESOCKET y deja el motivo
-        // real (ENETUNREACH, etc.) en el mensaje: hay que mirar ambos.
-        const esErrorDeRed = ['ENETUNREACH', 'EHOSTUNREACH', 'ETIMEDOUT', 'ECONNREFUSED', 'EAI_AGAIN', 'ESOCKET'].includes(code)
-            || /ENETUNREACH|EHOSTUNREACH|ETIMEDOUT|ECONNREFUSED/.test(msg);
-        if (esErrorDeRed) {
-            logger.error('[Email] No se pudo CONECTAR al servidor SMTP (problema de RED, NO de credenciales). '
-                + 'En Railway/PaaS suele ser IPv6 sin salida (ENETUNREACH).',
-                { code, error: msg });
-        } else {
-            logger.error('[Email] Credenciales SMTP rechazadas — los correos no se enviarán. '
-                + 'Si usás Gmail, necesitás 2-Step Verification + Contraseña de aplicación (no la contraseña normal).',
-                { code, responseCode: err?.responseCode, error: msg });
-        }
+        logger.error('[Email] Gmail API rechazó las credenciales — los correos no se enviarán. '
+            + 'Revisá que GMAIL_REFRESH_TOKEN sea válido (scope gmail.send) y que la Gmail API esté habilitada en Google Cloud.',
+            { code: err?.code, error: err?.message });
     }
 };
 
@@ -202,8 +188,7 @@ export const sendEntradaEmail = async ({
 </body>
 </html>`.trim()
 
-    await transporter.sendMail({
-        from: REMITENTE(),
+    await enviarCorreo({
         to: toEmail,
         subject: `🎟️ Tu entrada para "${eventoNombre}"`,
         html: htmlContent,
@@ -331,8 +316,7 @@ export const sendServiciosNotificacion = async (
 </body>
 </html>`.trim();
 
-    await transporter.sendMail({
-        from: REMITENTE(),
+    await enviarCorreo({
         to: toEmail,
         subject: `🎉 ¡Tu evento en ${salonNombre} está confirmado! Descubrí nuestros servicios`,
         html: htmlContent,
@@ -454,8 +438,7 @@ export const sendRegistrationConfirmationEmail = async (
 </html>
     `.trim();
 
-    await transporter.sendMail({
-        from: REMITENTE(),
+    await enviarCorreo({
         to: toEmail,
         subject: '¡Bienvenido/a a Dream Events! Tu registro fue exitoso',
         html: htmlContent,
@@ -502,8 +485,7 @@ export const sendComisionActualizadaEmail = async (
     Este es un aviso automático sobre cambios en las condiciones del contrato.
   </td></tr>
 </table></td></tr></table></body></html>`;
-    await transporter.sendMail({
-        from: REMITENTE(),
+    await enviarCorreo({
         to: toEmail,
         subject: `Cambio en las comisiones de tu contrato — ${perfilLabel}`,
         html,
@@ -575,8 +557,7 @@ export const sendCumpleanosCuponEmail = async (
 
 </table></td></tr></table></body></html>`.trim();
 
-    await transporter.sendMail({
-        from: REMITENTE(),
+    await enviarCorreo({
         to: toEmail,
         subject: `🎂 ¡Feliz cumple, ${nombre}! Tenés ${descuentoPorcentaje}% OFF para tu fiesta`,
         html,
