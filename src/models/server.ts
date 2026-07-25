@@ -25,6 +25,7 @@ import { getMpCredentials, getMpEncryptionKey } from '../config/mercadopago';
 import { iniciarJobLiberacionVencidas } from '../jobs/liberarReservasVencidas';
 import { iniciarJobVerificarPagos } from '../jobs/verificarPagosPendientes';
 import { iniciarJobCuponCumpleanos } from '../jobs/cuponCumpleanos';
+import testRoutes from '../routes/test.routes';
 import { obtenerCertificadoLocal } from '../libs/certLocal';
 import { verificarEmail } from '../services/email.service';
 import { logger } from '../libs/logger';
@@ -139,6 +140,7 @@ export class Server {
         this.app.use(this.apiPaths.comisiones, comisionesRoutes);
         this.app.use(this.apiPaths.autorizaciones, autorizacionesRoutes);
         this.app.use(this.apiPaths.pedidosTorta, pedidosTortaRoutes);
+        this.app.use('/api/test', testRoutes); // temporal: prueba de envío de email
         // Error handler global — debe ir después de todas las rutas
         this.app.use(errorHandler);
     }
